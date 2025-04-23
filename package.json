@@ -20,22 +20,23 @@
         "lint": "eslint src --ext .ts,.tsx",
         "lint:fix": "npm run lint -- --fix",
         "pack": "electron-builder --dir",
-        "release": "electron-builder",
+        "release": "electron-builder --publish always",
+        "release:dry": "electron-builder --publish onTagOrDraft",
         "obf": "javascript-obfuscator build/main/index.js --output build/main/index-obf.js --split-strings-chunk-length 8",
         "bytenode": "bytenode -c build/main/index-obf.js -e"
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/AuroraTeam/Launcher.git"
+        "url": "git+https://github.com/PrimalCat-Real/MeloriumLauncher"
     },
     "contributors": [
-        "JoCat (https://github.com/JoCat)"
+        "PrimalCat (https://github.com/PrimalCat-Real)"
     ],
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/AuroraTeam/Launcher/issues"
+        "url": "https://github.com/PrimalCat-Real/MeloriumLauncher/issues"
     },
-    "homepage": "https://github.com/AuroraTeam/Launcher#readme",
+    "homepage": "https://github.com/PrimalCat-Real/MeloriumLauncher/Launcher#readme",
     "devDependencies": {
         "@aurora-launcher/esbuild-decorators": "^0.0.1",
         "@types/node": "^18.19.86",
