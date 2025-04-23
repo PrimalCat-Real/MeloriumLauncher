@@ -153,3 +153,11 @@ body {
 .background-online-gradient{
     background: linear-gradient(0.00deg, rgb(41, 8, 51),rgba(123, 23, 153, 0.5) 100%);
 }
+.draggable{
+    -webkit-app-region: drag
+}
+
+.no-drag {
+    -webkit-app-region: no-drag
+}
+  

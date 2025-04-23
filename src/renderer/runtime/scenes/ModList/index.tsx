@@ -101,7 +101,7 @@ export function MinimalTable() {
           className="max-w-sm text-start bg-accent border-transparent font-sans"
         />
       </div>
-      <div className="space-y-2 max-h-[75vh] overflow-auto">
+      <div className="space-y-2 max-h-[73vh] overflow-auto">
         {table.getRowModel().rows.map((row) => (
           <div
             key={row.id}

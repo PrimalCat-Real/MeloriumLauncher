@@ -33,7 +33,7 @@ export default function TitleBar() {
     };
 
     return (
-        <div className="grid grid-cols-3 w-full h-10 custom-purple-gradient items-center px-4">
+        <div className="grid grid-cols-3 w-full h-10 custom-purple-gradient items-center px-4 draggable">
             {/* Левая колонка - кнопка назад и заголовок */}
             <div className="flex items-center justify-start gap-4">
                 <If state={backBtn.show}>
@@ -102,12 +102,12 @@ export default function TitleBar() {
                         Моды
                     </Button>
                 </If>
-                <button className={classes.hide} onClick={hide}>
+                <button className={`${classes.hide} no-drag`} onClick={hide}>
                     <svg width="24" height="24" viewBox="0 0 24 24">
                         <path d="M19 13H5V11H19V13Z" fill="white" />
                     </svg>
                 </button>
-                <button className={classes.close} onClick={close}>
+                <button className={`${classes.close} no-drag`} onClick={close}>
                     <svg width="24" height="24" viewBox="0 0 24 24">
                         <path
                             d="M13.46 12L19 17.54V19H17.54L12 13.46L6.46 19H5V17.54L10.54 12L5 6.46V5H6.46L12 10.54L17.54 5H19V6.46L13.46 12Z"
