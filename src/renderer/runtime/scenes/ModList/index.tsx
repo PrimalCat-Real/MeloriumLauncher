@@ -5,7 +5,6 @@ import {
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
-  Row,
   useReactTable,
 } from "@tanstack/react-table";
 import { Input } from "../../../components/ui/input";
@@ -16,39 +15,14 @@ import {
   TableHeader,
   TableRow,
 } from "../../../components/ui/table";
-import { Button } from "../../../components/ui/button";
 import { Switch } from '../../../components/ui/switch';
 
-const testData = [
-  {
-    id: "1",
-    name: "Мод 1",
-    description: "Test",
-  },
-  {
-    id: "2",
-    name: "Мод 2",
-    description: "описание мода",
-  },
-  {
-    id: "3",
-    name: "Мод 3",
-    description: "Test",
-  },
-  {
-    id: "4",
-    name: "Мод 4",
-    description: "описание мода",
-  },
-];
-
-type Item = {
-  id: string;
+type ModItem = {
   name: string;
-  description: string;
+  enabled: boolean;
 };
 
-const columns: ColumnDef<Item>[] = [
+const columns: ColumnDef<ModItem>[] = [
   {
     id: "info",
     header: () => null,
@@ -56,34 +30,56 @@ const columns: ColumnDef<Item>[] = [
       <div className="py-2 opacity-80">
         <div className="font-semibold">{row.original.name}</div>
         <div className="text-sm text-muted-foreground">
-          {row.original.description}
         </div>
       </div>
     ),
     filterFn: (row, id, value) => {
       if (!value) return true;
-      
       const searchTerms = value.toLowerCase().split(/\s+/).filter(Boolean);
-      const rowText = `${row.original.name.toLowerCase()} ${row.original.description.toLowerCase()}`;
-      
+      const rowText = `${row.original.name.toLowerCase()}`;
       return searchTerms.every((term: string) => rowText.includes(term));
     },
   },
   {
     id: "actions",
     header: () => null,
-    cell: () => (
-      <div className="">
-        <Switch />
-      </div>
-    ),
+    cell: ({ row }) => {
+      const [enabled, setEnabled] = React.useState(row.original.enabled);
+
+      const toggle = async () => {
+        const newValue = !enabled;
+      
+        try {
+          await window.launcherAPI.mods.toggleMod(row.original.name, newValue);
+          setEnabled(newValue); // Только если операция удалась
+        } catch (error) {
+          console.error("Не удалось изменить статус мода:", error);
+        }
+      };
+      
+
+      return (
+        <Switch checked={enabled} onCheckedChange={toggle} />
+      );
+    },
   },
 ];
 
 export function MinimalTable() {
+  const [mods, setMods] = React.useState<ModItem[]>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+
+  React.useEffect(() => {
+    const loadMods = async () => {
+      const data = await window.launcherAPI.mods.getMods();
+      const sortedData = data.sort((a: { name: string; }, b: { name: any; }) => a.name.localeCompare(b.name));
+      setMods(sortedData);
+    };
+    loadMods();
+  }, []);
+
   const table = useReactTable({
-    data: testData,
+    data: mods,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -102,10 +98,10 @@ export function MinimalTable() {
           onChange={(event) =>
             table.getColumn("info")?.setFilterValue(event.target.value)
           }
-          className="max-w-sm text-start bg-accent border-transparent"
+          className="max-w-sm text-start bg-accent border-transparent font-sans"
         />
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2 max-h-[75vh] overflow-auto">
         {table.getRowModel().rows.map((row) => (
           <div
             key={row.id}

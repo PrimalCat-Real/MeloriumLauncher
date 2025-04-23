@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useRecoilValue } from 'recoil';
 
 import If from '../If';
@@ -22,6 +22,16 @@ export default function TitleBar() {
         navigate(-1);
     }
 
+    const location = useLocation();
+
+    const handleModsButtonClick = () => {
+        if (location.pathname === '/ModList') {
+        navigate('/ServersList');
+        } else {
+        navigate('/ModList');
+        }
+    };
+
     return (
         <div className="grid grid-cols-3 w-full h-10 custom-purple-gradient items-center px-4">
             {/* Левая колонка - кнопка назад и заголовок */}
@@ -36,7 +46,7 @@ export default function TitleBar() {
                         </svg>
                     </button>
                 </If>
-                <If state={true}>
+                <If state={title.show}>
                     <div className="flex items-center gap-2">
                         <img className="h-5" src="./runtime/assets/images/logo.png" alt="" />
                         <span className="font-bold text-lg">{title.text}</span>
@@ -75,7 +85,7 @@ export default function TitleBar() {
                                 strokeLinecap="round"
                             />
                         </svg>
-                        <div className={`ml-2`}>
+                        <div className={`ml-2 font-sans`}>
                             {user.username}
                         </div>
                     </div>
@@ -84,9 +94,9 @@ export default function TitleBar() {
 
             {/* Правая колонка - кнопки */}
             <div className="flex items-center justify-end gap-4">
-                <If state={backBtn.show}>
+                <If state={title.show}>
                     <Button 
-                        onClick={() => {navigate('/ModList');}} 
+                        onClick={handleModsButtonClick} 
                         className="h-6.5 w-16"
                     >
                         Моды
