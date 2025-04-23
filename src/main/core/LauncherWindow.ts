@@ -17,17 +17,49 @@ const isDev = process.env.DEV === 'true' && !app.isPackaged;
 @Service()
 export class LauncherWindow {
     private mainWindow?: BrowserWindow;
+    private setupAutoUpdater() {
+        // Отключаем все диалоги и уведомления
+        autoUpdater.autoDownload = true;
+        autoUpdater.autoInstallOnAppQuit = true;
+        autoUpdater.allowDowngrade = false;
+        autoUpdater.fullChangelog = false;
+        autoUpdater.logger = console; // Логируем в консоль для отладки
 
+        // Для разработки отключаем автообновление
+        // if (isDev) {
+        //     autoUpdater.autoDownload = false;
+        //     console.log('Автообновление отключено в dev-режиме');
+        //     return;
+        // }
+
+        autoUpdater.on('update-downloaded', () => {
+            console.log('Обновление загружено, будет установлено при закрытии');
+            // Можно добавить логику для немедленной установки:
+            autoUpdater.quitAndInstall();
+        });
+
+        autoUpdater.on('error', (error) => {
+            console.error('Ошибка автообновления:', error);
+        });
+    }
     /**
      * Launcher initialization
      */
     createWindow() {
+        this.setupAutoUpdater(); 
         autoUpdater.checkForUpdatesAndNotify();
         // This method will be called when Electron has finished
         // initialization and is ready to create browser windows.
         // Some APIs can only be used after this event occurs.
         app.whenReady().then(() => {
             this.mainWindow = this.createMainWindow();
+            setTimeout(() => {
+                if (!isDev) {
+                    autoUpdater.checkForUpdates()
+                        .then(() => console.log('Проверка обновлений завершена'))
+                        .catch(console.error);
+                }
+            }, 10000);
             if (isDev) {
                 installExtension(REACT_DEVELOPER_TOOLS, {
                     loadExtensionOptions: {
