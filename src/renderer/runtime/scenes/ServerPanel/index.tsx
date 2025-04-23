@@ -8,7 +8,7 @@ import { LoadProgress } from '../../../../common/types';
 import { usePingServer } from '../../hooks/pingServer';
 import { Button } from '../../../components/ui/button';
 import { Progress } from '../../../components/ui/progress';
-
+import titleImg from '@/assets/images/title.png';
 // TODO Refactoring scene
 export default function ServerPanel() {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -84,7 +84,7 @@ export default function ServerPanel() {
 
     return (
         <div className="flex flex-col items-center justify-start py-4 gap-4">
-            <img className='h-[70px]' src="../../../runtime/assets/images/title.png" alt="" />
+            <img className='h-[70px]' src={titleImg} alt="" />
             {/* <div className={classes.info}>
                 <div className={classes.title}>{selectedServer.title}</div>
                 <div className={classes.status}>

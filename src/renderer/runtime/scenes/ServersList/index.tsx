@@ -8,6 +8,7 @@ import classes from './index.module.sass';
 import { useTitlebar } from '../../components/TitleBar/hooks';
 import { Button } from '../../../components/ui/button';
 import { usePingServer } from '../../hooks/pingServer';
+import titleImg from '@/assets/images/title.png';
 
 export default function ServersList() {
     const { hideTitlebarBackBtn } = useTitlebar();
@@ -50,7 +51,7 @@ export default function ServersList() {
         //     </div>
         // </div>
         <div className="flex flex-col items-center justify-start py-4">
-            <img className='h-[220px]' src="../../../runtime/assets/images/title.png" alt="" />
+            <img className='h-[220px]' src={titleImg} alt="" />
             <p className='text-center font-sans text-xl font-semibold uppercase'>РАСКРОЙ ВСЕ ТАЙНЫ<br></br>ЗАГАДОЧНОГО КОРОЛЕВСТВА!</p>
             <div className='flex flex-col gap-10 items-center mt-10'>
                 <div className="border border-border flex items-center justify-center px-4 py-2 rounded-xl gap-2 background-online-gradient w-min flex-nowrap text-nowrap">

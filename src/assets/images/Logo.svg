@@ -1,0 +1,23 @@
+<svg width="100.000000" height="100.000000" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+	<desc>
+			Created with Pixso.
+	</desc>
+	<defs>
+		<clipPath id="clip2_1">
+			<rect id="Milorium Logo 1" rx="0.000000" width="99.388672" height="99.388672" transform="translate(0.305663 0.305663)" fill="white" fill-opacity="0"/>
+		</clipPath>
+	</defs>
+	<rect id="Milorium Logo 1" rx="0.000000" width="99.388672" height="99.388672" transform="translate(0.305663 0.305663)" fill="#FFFFFF" fill-opacity="0"/>
+	<g clip-path="url(#clip2_1)">
+		<path id="Vector" d="M45.48 -6.11e-5L21.39 30.54L6.93 22.21L45.48 -6.11e-5Z" fill="#DB66FF" fill-opacity="1.000000" fill-rule="nonzero"/>
+		<path id="Vector" d="M74.14 31.12L25.84 31.12L49.99 0.51L74.14 31.12Z" fill="#DB66FF" fill-opacity="1.000000" fill-rule="nonzero"/>
+		<path id="Vector" d="M90.49 77.78L51.93 100L51.93 83.33L90.49 77.78Z" fill="#DB66FF" fill-opacity="1.000000" fill-rule="nonzero"/>
+		<path id="Vector" d="M48.06 83.33L48.06 100L9.5 77.78L48.06 83.33Z" fill="#DB66FF" fill-opacity="1.000000" fill-rule="nonzero"/>
+		<path id="Vector" d="M94.99 25.54L94.99 69.99L80.53 33.88L94.99 25.54Z" fill="#DB66FF" fill-opacity="1.000000" fill-rule="nonzero"/>
+		<path id="Vector" d="M92.29 73.62L53.65 79.19L77.8 37.45L92.29 73.62Z" fill="#DB66FF" fill-opacity="1.000000" fill-rule="nonzero"/>
+		<path id="Vector" d="M46.34 79.19L7.7 73.62L22.19 37.45L46.34 79.19Z" fill="#DB66FF" fill-opacity="1.000000" fill-rule="nonzero"/>
+		<path id="Vector" d="M19.45 33.88L5 69.98L5 25.54L19.45 33.88Z" fill="#DB66FF" fill-opacity="1.000000" fill-rule="nonzero"/>
+		<path id="Vector" d="M93.06 22.21L78.6 30.54L54.5 -6.11e-5L93.06 22.21Z" fill="#DB66FF" fill-opacity="1.000000" fill-rule="nonzero"/>
+		<path id="Vector" d="M74.78 34.97L50 77.8L25.21 34.97L74.78 34.97Z" fill="#A909DA" fill-opacity="1.000000" fill-rule="nonzero"/>
+	</g>
+</svg>

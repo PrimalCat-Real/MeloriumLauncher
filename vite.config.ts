@@ -27,7 +27,7 @@ export default defineConfig({
             // },
             {
                 find: '@',
-                replacement: path.resolve(__dirname, "./src"),
+                replacement: path.resolve(__dirname, "./src/renderer/runtime"),
             },
             {
                 find: /@runtime\/components\/(.*)/,
