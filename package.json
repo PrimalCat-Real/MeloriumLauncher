@@ -104,28 +104,38 @@
         }
     },
     "build": {
-        "appId": "ru.aurora.launcher",
-        "productName": "Aurora Launcher",
+        "appId": "primalcat.melorium",
+        "productName": "Melorium",
         "publish": [
             {
                 "provider": "github",
                 "releaseType": "release",
-                "owner": "AuroraTeam",
-                "repo": "Launcher"
+                "owner": "PrimalCat-Real",
+                "repo": "MeloriumLauncher",
+                "private": false
             }
         ],
         "directories": {
-            "buildResources": "resources"
+            "buildResources": "resources",
+            "output": "out"
         },
         "files": [
             "build/**/*",
             "!node_modules/**/*"
         ],
         "nsis": {
-            "artifactName": "${name}-Setup-${version}.${ext}"
+            "artifactName": "${name}-Setup-${version}.${ext}",
+            "oneClick": false,
+            "perMachine": false,
+            "allowToChangeInstallationDirectory": true
+        },
+        "win": {
+            "target": "nsis",
+            "publish": ["github"]
         },
         "mac": {
-            "category": "public.app-category.games"
+            "category": "public.app-category.games",
+            "target": "dmg"
         },
         "linux": {
             "target": [
