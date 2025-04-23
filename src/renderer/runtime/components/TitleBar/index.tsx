@@ -94,7 +94,7 @@ export default function TitleBar() {
 
             {/* Правая колонка - кнопки */}
             <div className="flex items-center justify-end gap-4">
-                <If state={title.show}>
+                <If state={user.show}>
                     <Button 
                         onClick={handleModsButtonClick} 
                         className="h-6.5 w-16"
