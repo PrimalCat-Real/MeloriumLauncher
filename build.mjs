@@ -2,38 +2,44 @@ import { esbuildDecorators } from '@aurora-launcher/esbuild-decorators';
 import { context } from 'esbuild';
 import minimist from 'minimist';
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const { _, watch, ...args } = minimist(process.argv.slice(2));
+const args = minimist(process.argv.slice(2));
+const watch = args.watch;
+const format = 'cjs'; // Всегда используем CommonJS для Electron main process
 
 if (!watch) {
-    console.log('Build...');
-    console.time('Build successfully');
+    console.log('Building main process (CommonJS)...');
+    console.time('Build completed');
 }
 
-const ctx = await context({
+const buildOptions = {
     entryPoints: ['src/main/index.ts'],
     bundle: true,
-    sourcemap: true,
+    sourcemap: args.sourcemap ? 'inline' : false,
     platform: 'node',
     target: 'node20',
-    format: 'cjs',
-    outdir: 'build/main',
+    format,
+    outfile: 'build/main/index.cjs', // Явное указание .cjs
     external: ['electron'],
     keepNames: true,
     loader: {
         '.png': 'file',
-        //TODO Secure auth
         '.pem': 'base64',
     },
     plugins: [esbuildDecorators()],
-    ...args,
-}).catch(() => process.exit(1));
+};
 
-if (watch) {
-    console.log('Watching...');
-    await ctx.watch();
-} else {
-    await ctx.rebuild();
-    await ctx.dispose();
-    console.timeEnd('Build successfully');
+try {
+    const ctx = await context(buildOptions);
+
+    if (watch) {
+        console.log('Watching for changes...');
+        await ctx.watch();
+    } else {
+        await ctx.rebuild();
+        await ctx.dispose();
+        console.timeEnd('Build completed');
+    }
+} catch (error) {
+    console.error('Build failed:', error);
+    process.exit(1);
 }

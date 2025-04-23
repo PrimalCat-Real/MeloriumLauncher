@@ -5,6 +5,7 @@ import Layout from './runtime/components/Layout';
 import Login from './runtime/scenes/Login';
 import ServerPanel from './runtime/scenes/ServerPanel';
 import ServersList from './runtime/scenes/ServersList';
+import ModList from './runtime/scenes/ModList';
 
 export default function App() {
     return (
@@ -15,6 +16,7 @@ export default function App() {
                         <Route index element={<Login />} />
                         <Route path="/ServersList" element={<ServersList />} />
                         <Route path="/ServerPanel" element={<ServerPanel />} />
+                        <Route path="/ModList" element={<ModList />} />
                     </Route>
                 </Routes>
             </HashRouter>

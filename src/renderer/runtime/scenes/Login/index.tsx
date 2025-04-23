@@ -5,6 +5,11 @@ import logo from '../../assets/images/logo.png';
 import { useModal } from '../../components/Modal/hooks';
 import { useTitlebar } from '../../components/TitleBar/hooks';
 import classes from './index.module.sass';
+import { Button } from '../../../components/ui/button';
+
+import LoginContainer from '../../assets/images/login_container.svg'
+import LoginCard from '../../components/icons/LoginCard';
+import { Input } from '../../../components/ui/input';
 
 interface AuthData {
     [k: string]: string;
@@ -54,19 +59,28 @@ export default function Login() {
     };
 
     return (
-        <div className={classes.block}>
-            <img src={logo} />
-            <div>Aurora Launcher</div>
-            <p>
+        <section className='flex items-center justify-center h-full w-full'>
+            <div className="flex flex-col items-center justify-between w-[300px] h-[450px] relative p-1 gap-4 py-10">
+            <img className='h-20' src={logo} />
+            <LoginCard></LoginCard>
+            <div className='space-y-1'>
+            <h1 className='font-extrabold text-3xl font-sans tracking-wide text-center'>Melorium</h1>
+            <p className='text-center'>
                 Введите логин и пароль,
                 <br />
                 чтобы продолжить
             </p>
-            <form onSubmit={auth}>
-                <input type="text" placeholder="Логин" name="login" />
-                <input type="password" placeholder="Пароль" name="password" />
-                <button>Войти</button>
+            </div>
+            
+            <form onSubmit={auth} className='z-10 flex flex-col gap-4 py-3 font-semibold placeholder:text-secondary-foreground'>
+                <Input type="text" placeholder="Логин" name="login"></Input>
+                <Input type="password" placeholder="Пароль" name="password"></Input>
+                {/* <input type="text" placeholder="Логин" name="login" /> */}
+                {/* <input type="password" placeholder="Пароль" name="password" /> */}
+                <Button className='mt-6' variant={'default'}>Войти</Button>
             </form>
         </div>
+        </section>
+        
     );
 }

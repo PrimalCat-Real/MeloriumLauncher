@@ -4,6 +4,7 @@ import { useRecoilValue } from 'recoil';
 import If from '../If';
 import classes from './index.module.sass';
 import { titlebarBackBtn, titlebarTitle, titlebarUser } from './states';
+import { Button } from '../../../components/ui/button';
 
 export default function TitleBar() {
     const backBtn = useRecoilValue(titlebarBackBtn);
@@ -22,8 +23,9 @@ export default function TitleBar() {
     }
 
     return (
-        <div className={classes.titlebar}>
-            <div>
+        <div className="grid grid-cols-3 w-full h-10 custom-purple-gradient items-center px-4">
+            {/* Левая колонка - кнопка назад и заголовок */}
+            <div className="flex items-center justify-start gap-4">
                 <If state={backBtn.show}>
                     <button className={classes.back} onClick={historyBack}>
                         <svg width="24" height="24" viewBox="0 0 24 24">
@@ -35,12 +37,17 @@ export default function TitleBar() {
                     </button>
                 </If>
                 <If state={title.show}>
-                    <span className={classes.text}>{title.text}</span>
+                    <div className="flex items-center gap-2">
+                        <img className="h-5" src="./runtime/assets/images/logo.png" alt="" />
+                        <span className="font-bold text-lg">{title.text}</span>
+                    </div>
                 </If>
             </div>
-            <div>
+
+            {/* Центральная колонка - пользователь (строго по центру) */}
+            <div className="flex items-center justify-center">
                 <If state={user.show}>
-                    <div className={classes.user}>
+                    <div className={`flex items-center justify-center`}>
                         <svg
                             width="22px"
                             height="22px"
@@ -68,14 +75,22 @@ export default function TitleBar() {
                                 strokeLinecap="round"
                             />
                         </svg>
-                        <div
-                            className={[classes.username, classes.text].join(
-                                ' ',
-                            )}
-                        >
+                        <div className={`ml-2`}>
                             {user.username}
                         </div>
                     </div>
+                </If>
+            </div>
+
+            {/* Правая колонка - кнопки */}
+            <div className="flex items-center justify-end gap-4">
+                <If state={backBtn.show}>
+                    <Button 
+                        onClick={() => {navigate('/ModList');}} 
+                        className="h-6.5 w-16"
+                    >
+                        Моды
+                    </Button>
                 </If>
                 <button className={classes.hide} onClick={hide}>
                     <svg width="24" height="24" viewBox="0 0 24 24">
