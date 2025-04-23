@@ -36,7 +36,7 @@ export default function TitleBar() {
                         </svg>
                     </button>
                 </If>
-                <If state={title.show}>
+                <If state={true}>
                     <div className="flex items-center gap-2">
                         <img className="h-5" src="./runtime/assets/images/logo.png" alt="" />
                         <span className="font-bold text-lg">{title.text}</span>
