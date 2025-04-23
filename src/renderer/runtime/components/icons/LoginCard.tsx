@@ -21,7 +21,7 @@ const LoginCard = () => {
     //     <rect id="Rectangle 1094" rx="40.000000" width="643.000000" height="968.000000" transform="matrix(-1 0 0 1 643 0)" fill="url(#paint_radial_2_428_0)" fill-opacity="0.400000"/>
     //     <rect id="Rectangle 1094" rx="40.000000" width="641.000000" height="966.000000" transform="matrix(-1 0 0 1 643 0)" stroke="url(#paint_linear_2_428_1)" stroke-opacity="1.000000" stroke-width="2.000000"/>
     // </svg>
-    <svg className='absolute left-0 top-0 z-0 shadow-login-card' width="300.000000" height="450.000000" viewBox="0 0 300 450" fill="none" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <svg className='absolute left-0 top-0 z-0 shadow-login-card' width="300.000000" height="450.000000" viewBox="0 0 300 450" fill="none" xmlns="http://www.w3.org/2000/svg">
 	<desc>
 			Created with Pixso.
 	</desc>

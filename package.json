@@ -7,6 +7,7 @@
     "private": true,
     "type": "module",
     "scripts": {
+        "build": "npm run clean && npm run build:renderer && npm run build:preload && npm run build:main",
         "build:main": "node build.mjs",
         "build:main:watch": "node build.mjs --watch --sourcemap",
         "dev": "concurrently -i -n electron,main,preload,renderer -c cyan.bold,blue.bold,yellow.bold,magenta.bold \"npm:start:dev\" \"npm:build:main:watch\" \"npm:build:preload -- --watch --sourcemap=inline\" \"vite\"",
@@ -128,11 +129,14 @@
             "artifactName": "${name}-Setup-${version}.${ext}",
             "oneClick": false,
             "perMachine": false,
-            "allowToChangeInstallationDirectory": true
+            "allowToChangeInstallationDirectory": true,
+            "installerIcon": "resources/icon.ico"
         },
         "win": {
             "target": "nsis",
-            "publish": ["github"]
+            "publish": ["github"],
+            "icon": "resources/icon.ico",
+            "sign": null
         },
         "mac": {
             "category": "public.app-category.games",
@@ -144,6 +148,7 @@
                 "rpm",
                 "AppImage"
             ],
+            "icon": "resources/icon.png",
             "category": "Game",
             "maintainer": "AuroraTeam <null@aurora-team.ru>"
         }
