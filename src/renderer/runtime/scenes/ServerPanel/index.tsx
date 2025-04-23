@@ -148,7 +148,7 @@ export default function ServerPanel() {
                     Играть
                 </button>
             </div> */}
-            <Button onClick={startGame} disabled={gameStarted} variant={'default'} className='text-center h-[40px] w-[240px] text-lg'>Играть</Button>
+            <Button onClick={startGame} disabled={gameStarted} variant={'default'} className='text-center h-[40px] w-[240px] text-lg mt-2'>Играть</Button>
 
         </div>
     );
