@@ -5,7 +5,7 @@ import If from '../If';
 import classes from './index.module.sass';
 import { titlebarBackBtn, titlebarTitle, titlebarUser } from './states';
 import { Button } from '../../../components/ui/button';
-import logo from "@/runtime/assets/images/logo.png"
+import logo from '@/assets/images/logo.png';
 export default function TitleBar() {
     const backBtn = useRecoilValue(titlebarBackBtn);
     const title = useRecoilValue(titlebarTitle);
