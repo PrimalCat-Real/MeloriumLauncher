@@ -5,7 +5,7 @@ import If from '../If';
 import classes from './index.module.sass';
 import { titlebarBackBtn, titlebarTitle, titlebarUser } from './states';
 import { Button } from '../../../components/ui/button';
-
+import logo from "@/runtime/assets/images/logo.png"
 export default function TitleBar() {
     const backBtn = useRecoilValue(titlebarBackBtn);
     const title = useRecoilValue(titlebarTitle);
@@ -48,7 +48,7 @@ export default function TitleBar() {
                 </If>
                 <If state={title.show}>
                     <div className="flex items-center gap-2">
-                        <img className="h-5" src="./runtime/assets/images/logo.png" alt="" />
+                        <img className="h-5" src={logo} alt="" />
                         <span className="font-bold text-lg">{title.text}</span>
                     </div>
                 </If>
