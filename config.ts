@@ -46,10 +46,14 @@ export async function initApiConfig() {
 
     if (!isMainAvailable) {
         activeApi = PROXY_SERVER;
+        
         console.warn(`[API CONFIG] ❌ Main server not available, switched to proxy: ${PROXY_SERVER}`);
+        return PROXY_SERVER
     } else {
         console.info(`[API CONFIG] ✅ Connected to main server: ${MAIN_SERVER}`);
+        return MAIN_SERVER
     }
+    
 }
 
 
