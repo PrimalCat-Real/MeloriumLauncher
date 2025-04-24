@@ -7,12 +7,15 @@ import { Launcher } from './core/Launcher';
 import { registerModHandlers } from './ipc/Mods';
 import { initApiConfig } from '@config';
 
-registerModHandlers();
+let launcher;
+
 async function bootstrap() {
     await initApiConfig();
-    const launcher = Container.get(Launcher);
+    launcher = Container.get(Launcher);
 }
+registerModHandlers();
 
 bootstrap();
+
 // Явно указываем использование Container
 // const launcher = Container.get(Launcher);

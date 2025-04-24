@@ -18,8 +18,9 @@
 
 // export const appPath = '.aurora-launcher';
 
-const MAIN_SERVER = 'http://65.109.31.100:1370';
-const PROXY_SERVER = 'http://185.72.144.212:1370';
+
+const PROXY_SERVER = 'http://65.109.31.100:1370';
+const MAIN_SERVER = 'http://185.72.144.212:1370';
 
 let activeApi = MAIN_SERVER;
 
