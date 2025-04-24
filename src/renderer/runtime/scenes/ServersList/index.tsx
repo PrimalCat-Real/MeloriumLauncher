@@ -26,13 +26,13 @@ export default function ServersList() {
         launcherAPI.scenes.serversList.getServers().then(setServers);
     }, []);
 
-    useEffect(() => {
-        const fetchApiConfig = async () => {
-            const result = await initApiConfig();
-            setApiResult(result);
-          };
-          fetchApiConfig()
-      }, []); 
+    // useEffect(() => {
+    //     const fetchApiConfig = async () => {
+    //         const result = await initApiConfig();
+    //         setApiResult(result);
+    //       };
+    //       fetchApiConfig()
+    //   }, []); 
 
     const selectServer = async (server: Server) => {
         

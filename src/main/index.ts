@@ -5,17 +5,16 @@ import 'reflect-metadata';
 import { Container } from 'typedi';
 import { Launcher } from './core/Launcher';
 import { registerModHandlers } from './ipc/Mods';
-import { initApiConfig } from '@config';
 
 let launcher;
 
-async function bootstrap() {
-    await initApiConfig();
-    launcher = Container.get(Launcher);
-}
+// async function bootstrap() {
+//     await initApiConfig();
+    
+// }
 registerModHandlers();
 
-bootstrap();
-
+// bootstrap();
+launcher = Container.get(Launcher);
 // Явно указываем использование Container
 // const launcher = Container.get(Launcher);

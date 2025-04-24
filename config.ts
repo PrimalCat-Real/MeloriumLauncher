@@ -10,16 +10,16 @@
 //     title: 'Melorium',
 // };
 
-// export const api = {
-//     ws: 'ws://65.109.31.100:1370/ws',
-//     web: 'http://65.109.31.100:1370',
-//     // extraToken: token,
-// };
+export const api = {
+    ws: 'ws://185.72.144.212:1370/ws',
+    web: 'http://185.72.144.212:1370',
+    // extraToken: token,
+};
 
 // export const appPath = '.aurora-launcher';
 
 
-const PROXY_SERVER = 'http://65.109.31.100:1370';
+const PROXY_SERVER = 'http://185.72.144.212:1370';
 const MAIN_SERVER = 'http://185.72.144.212:1370';
 
 let activeApi = MAIN_SERVER;
@@ -67,17 +67,18 @@ export const window = {
     title: 'Melorium',
 };
 
-export const api = {
-    get web() {
-        return activeApi;
-    },
-    get ws() {
-        return activeApi.replace(/^http/, 'ws') + '/ws';
-    }
-    // ,
-    // get extraToken(){
-    //     return token
-    // }
-};
+// export const api = {
+//     get web() {
+//         return 'ws://185.72.144.212:1370/ws'
+//     },
+//     get ws() {
+//         return  'http://185.72.144.212:1370'
+//         // return activeApi.replace(/^http/, 'ws') + '/ws';
+//     }
+//     // ,
+//     // get extraToken(){
+//     //     return token
+//     // }
+// };
 
 export const appPath = '.aurora-launcher';
