@@ -37,7 +37,7 @@ export default function TitleBar() {
             {/* Левая колонка - кнопка назад и заголовок */}
             <div className="flex items-center justify-start gap-4">
                 <If state={backBtn.show}>
-                    <button className={classes.back} onClick={historyBack}>
+                    <button className={`${classes.back} no-drag`} onClick={historyBack}>
                         <svg width="24" height="24" viewBox="0 0 24 24">
                             <path
                                 d="M18.84 10.92V12.92H6.84L12.34 18.42L10.92 19.84L3 11.92L10.92 4L12.34 5.42L6.84 10.92H18.84Z"
