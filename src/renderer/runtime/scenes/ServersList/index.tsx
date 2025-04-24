@@ -27,9 +27,9 @@ export default function ServersList() {
       }]);
     const navigate = useNavigate();
 
-    // useEffect(() => {
-    //     launcherAPI.scenes.serversList.getServers().then(setServers);
-    // }, []);
+    useEffect(() => {
+        launcherAPI.scenes.serversList.getServers().then(setServers);
+    }, []);
 
     useEffect(() => {
         const fetchApiConfig = async () => {
