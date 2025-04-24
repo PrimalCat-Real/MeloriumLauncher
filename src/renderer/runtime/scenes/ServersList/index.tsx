@@ -35,7 +35,8 @@ export default function ServersList() {
       }, []); 
 
     const selectServer = async (server: Server) => {
-        
+        console.log(server)
+        console.log("clicked")
         await launcherAPI.scenes.serversList.selectServer(server);
 
         navigate('/ServerPanel');
