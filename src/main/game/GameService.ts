@@ -22,9 +22,10 @@ export class GameService {
 
     async setServer(server: Server) {
         this.selectedServer = server;
-        this.selectedProfile = await this.apiService.getProfile(
-            server.profileUUID,
-        );
+        console.log(`GameService.setServer: Received server UUID: ${server.profileUUID}`);
+        const fetchedProfile = await this.apiService.getProfile(server.profileUUID);
+        this.selectedProfile = fetchedProfile;
+        console.log(`GameService.setServer: Result of getProfile:`, fetchedProfile);
     }
 
     getServer() {

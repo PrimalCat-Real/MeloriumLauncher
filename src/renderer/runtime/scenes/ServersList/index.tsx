@@ -19,12 +19,17 @@ export default function ServersList() {
     const [apiResult, setApiResult] = useState<any>("");
     
 
-    const [servers, setServers] = useState<Server[]>([]);
+    const [servers, setServers] = useState<Server[]>([{
+        "ip": "65.109.31.100",
+        "port": 25565,
+        "title": "Melorium",
+        "profileUUID": "a384186a-b574-4ddb-8e44-0b2a29361329"
+      }]);
     const navigate = useNavigate();
 
-    useEffect(() => {
-        launcherAPI.scenes.serversList.getServers().then(setServers);
-    }, []);
+    // useEffect(() => {
+    //     launcherAPI.scenes.serversList.getServers().then(setServers);
+    // }, []);
 
     useEffect(() => {
         const fetchApiConfig = async () => {
