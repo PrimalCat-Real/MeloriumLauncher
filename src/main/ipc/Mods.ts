@@ -21,13 +21,14 @@ export function registerModHandlers() {
   });
 
   ipcMain.handle('toggle-mod', async (_event, modName: string, enable: boolean) => {
-    const modPath = path.join(modsPath, modName);
-    const disabledPath = modPath + ".disabled";
+    const modsPath = join(StorageHelper.clientsDir, 'Melorium', 'mods');
+    const modPathD = path.join(modsPath, modName);
+    const disabledPath = modPathD + ".disabled";
 
     if (enable) {
-      if (fs.existsSync(disabledPath)) fs.renameSync(disabledPath, modPath);
+      if (fs.existsSync(disabledPath)) fs.renameSync(disabledPath, modPathD);
     } else {
-      if (fs.existsSync(modPath)) fs.renameSync(modPath, disabledPath);
+      if (fs.existsSync(modPathD)) fs.renameSync(modPathD, disabledPath);
     }
   });
 }
