@@ -16,7 +16,7 @@
 //     // extraToken: token,
 // };
 export const api = {
-    ws: 'http://185.72.144.212:1370',
+    ws: 'ws://185.72.144.212:1370/ws',
     web: 'http://185.72.144.212:1370',
     // extraToken: token,
 };
