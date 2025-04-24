@@ -19,12 +19,7 @@ export default function ServersList() {
     const [apiResult, setApiResult] = useState<any>("");
     
 
-    const [servers, setServers] = useState<Server[]>([{
-        "ip": "65.109.31.100",
-        "port": 25565,
-        "title": "Melorium",
-        "profileUUID": "a384186a-b574-4ddb-8e44-0b2a29361329"
-      }]);
+    const [servers, setServers] = useState<Server[]>([]);
     const navigate = useNavigate();
 
     useEffect(() => {
@@ -41,10 +36,11 @@ export default function ServersList() {
 
     const selectServer = async (server: Server) => {
         
-        console.log("clicked")
-        console.log(JSON.stringify(server, null, 2));
+        await launcherAPI.scenes.serversList.getServers();
         await launcherAPI.scenes.serversList.selectServer(server);
-
+        
+        console.log(JSON.stringify(launcherAPI.scenes.serverPanel.getProfile, null, 2));
+        console.log(JSON.stringify(launcherAPI.scenes.serverPanel.getServer, null, 2));
         navigate('/ServerPanel');
     };
     const players = usePingServer({
@@ -74,7 +70,7 @@ export default function ServersList() {
             <div className='absolute right-5 bottom-5 flex flex-col'>
                 <h2>{apiResult}</h2>
                 {/* <h2>{api.web}</h2> */}
-                <Button onClick={() => {navigate('/ServerPanel')}}>Next</Button>
+                {/* <Button onClick={() => {navigate('/ServerPanel')}}>Next</Button> */}
                 {servers.map((server, i) => (
                     <h2>{server.title || "None"}</h2>
                 ))}

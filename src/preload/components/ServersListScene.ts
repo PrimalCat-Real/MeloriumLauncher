@@ -9,12 +9,10 @@ export default class ServersListScene {
     }
 
     static selectServer(server: Server) {
-        console.log("invoke start")
-        const invoke =  ipcRenderer.invoke(
+        return ipcRenderer.invoke(
+
             EVENTS.SCENES.SERVERS_LIST.SELECT_SERVER,
             server,
         );
-        console.log(invoke)
-        return invoke
     }
 }
