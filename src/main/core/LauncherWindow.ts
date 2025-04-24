@@ -137,8 +137,9 @@ export class LauncherWindow {
         mainWindow.on('ready-to-show', () => {
             mainWindow?.show();
 
+            mainWindow.webContents.openDevTools();
             // open developer tools when using development mode
-            if (isDev) mainWindow.webContents.openDevTools();
+            // if (isDev) mainWindow.webContents.openDevTools();
         });
 
         return mainWindow;
