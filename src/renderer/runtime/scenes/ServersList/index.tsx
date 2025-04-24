@@ -35,8 +35,9 @@ export default function ServersList() {
       }, []); 
 
     const selectServer = async (server: Server) => {
-        console.log(server)
+        
         console.log("clicked")
+        console.log(JSON.stringify(server, null, 2));
         await launcherAPI.scenes.serversList.selectServer(server);
 
         navigate('/ServerPanel');
@@ -68,6 +69,7 @@ export default function ServersList() {
             <div className='absolute right-5 bottom-5 flex flex-col'>
                 <h2>{apiResult}</h2>
                 {/* <h2>{api.web}</h2> */}
+                <Button onClick={() => {navigate('/ServerPanel')}}>Next</Button>
                 {servers.map((server, i) => (
                     <h2>{server.title || "None"}</h2>
                 ))}
