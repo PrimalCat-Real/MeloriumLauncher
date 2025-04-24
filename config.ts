@@ -10,9 +10,14 @@
 //     title: 'Melorium',
 // };
 
+// export const api = {
+//     ws: 'ws://65.109.31.100:1370/ws',
+//     web: 'http://65.109.31.100:1370',
+//     // extraToken: token,
+// };
 export const api = {
-    ws: 'ws://65.109.31.100:1370/ws',
-    web: 'http://65.109.31.100:1370',
+    ws: 'http://185.72.144.212:1370',
+    web: 'http://185.72.144.212:1370',
     // extraToken: token,
 };
 
