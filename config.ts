@@ -69,6 +69,10 @@ export const api = {
     get ws() {
         return activeApi.replace(/^http/, 'ws') + '/ws';
     }
+    // ,
+    // get extraToken(){
+    //     return token
+    // }
 };
 
 export const appPath = '.aurora-launcher';
