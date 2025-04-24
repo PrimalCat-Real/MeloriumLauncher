@@ -38,7 +38,8 @@ export class GameService {
     async startGame() {
         const profile = this.selectedProfile;
         const server = this.selectedServer;
-
+        console.log("profile", profile)
+        console.log("server", server)
         if (!profile || !server) {
             this.gameWindow.sendToConsole('Error: Profile or server not set');
             this.gameWindow.stopGame();
