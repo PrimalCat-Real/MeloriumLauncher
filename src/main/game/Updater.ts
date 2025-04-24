@@ -107,7 +107,7 @@ export class Updater {
 
     async validateGameFiles(clientArgs: Profile): Promise<void> {
         this.gameWindow.sendToConsole('Load client files');
-
+        const disabledMods = await getDisabledMods("mods");
         const hashes = await this.api.getUpdates(clientArgs.clientDir);
         if (!hashes) {
             throw new Error('Client not found');
@@ -125,11 +125,15 @@ export class Updater {
         await pMap(
             hashes,
             async (hash: any) => {
+            
+                
+                
                 await this.validateAndDownloadFile(
                     hash.path,
                     hash.sha1,
                     StorageHelper.clientsDir,
                     'clients',
+                    disabledMods
                 );
 
                 this.gameWindow.sendProgress({
@@ -152,31 +156,87 @@ export class Updater {
         );
     }
 
+    // async validateAndDownloadFile(
+    //     path: string,
+    //     sha1: string,
+    //     rootDir: string,
+    //     type: 'clients' | 'libraries' | 'assets',
+    // ): Promise<void> {
+    //     const filePath = join(rootDir, path);
+    //     mkdirSync(dirname(filePath), { recursive: true });
+
+    //     const fileUrl = this.getFileUrl(path, type);
+
+    //     try {
+    //         const fileHash = await HashHelper.getHashFromFile(filePath, 'sha1');
+    //         if (fileHash === sha1) return;
+    //     } catch (error) {
+    //         // ignore not found file
+    //     }
+
+    //     try {
+    //         await HttpHelper.downloadFile(fileUrl, filePath);
+    //     } catch (error) {
+    //         throw new Error(`file ${fileUrl} not found`);
+    //     }
+    // }
     async validateAndDownloadFile(
         path: string,
         sha1: string,
         rootDir: string,
         type: 'clients' | 'libraries' | 'assets',
+        disabledMods?: string[]
     ): Promise<void> {
+
+    
         const filePath = join(rootDir, path);
         mkdirSync(dirname(filePath), { recursive: true });
-
+    
         const fileUrl = this.getFileUrl(path, type);
-
+    
         try {
             const fileHash = await HashHelper.getHashFromFile(filePath, 'sha1');
             if (fileHash === sha1) return;
         } catch (error) {
-            // ignore not found file
+            // файл не найден — ничего страшного
         }
-
+    
         try {
-            await HttpHelper.downloadFile(fileUrl, filePath);
+            // if(!path.includes("appleskin-fabric")){
+            //     await HttpHelper.downloadFile(fileUrl, filePath);
+            // }
+            let shouldDownload = true;
+            if (disabledMods && disabledMods.length > 0) {
+                for (const disabledMod of disabledMods) {
+                    if (path.includes(disabledMod)) {
+                        shouldDownload = false;
+                        break;
+                    }
+                }
+            }
+
+            if (shouldDownload) {
+                await HttpHelper.downloadFile(fileUrl, filePath);
+            }
+           
         } catch (error) {
             throw new Error(`file ${fileUrl} not found`);
         }
     }
+    
 }
+
+import fs from "fs/promises";
+import path from "path";
+
+async function getDisabledMods(modsDir: string): Promise<string[]> {
+    const modsPath = join(StorageHelper.clientsDir, 'Melorium', 'mods');
+    const files = await fs.readdir(modsPath);
+    return files
+        .filter(f => f.endsWith(".disabled"))
+        .map(f => f.replace(/\.disabled$/, ""));
+}
+
 
 // TODO: Move to @aurora-launcher/core
 /**

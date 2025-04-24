@@ -1,12 +1,14 @@
 import { ipcMain } from 'electron';
 import fs from 'fs';
-import path from 'path';
+import { StorageHelper } from 'main/helpers/StorageHelper';
+import path, { join } from 'path';
 
-const modsPath = "C:\\Users\\roman\\.aurora-launcher\\clients\\Melorium\\mods";
+
 const blacklist = ["examplemod.jar"];
 
 export function registerModHandlers() {
-  ipcMain.handle('get-mods', async () => {
+    ipcMain.handle('get-mods', async () => {
+    const modsPath = join(StorageHelper.clientsDir, 'Melorium', 'mods');
     if (!fs.existsSync(modsPath)) return [];
 
     return fs.readdirSync(modsPath)
