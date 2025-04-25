@@ -39,11 +39,11 @@ export class Updater {
     
             if (isAvailable) {
                 this.currentHttpEndpointIndex = i;
-                this.gameWindow.sendToConsole(`Using endpoint ${i}`);
+                this.gameWindow.sendToConsole(`Using endpoint ${i+1}`);
                 console.log(`Using endpoint: ${endpoint}`);
                 return;
             } else {
-                this.gameWindow.sendToConsole(`Endpoint ${i} is unavailable.`);
+                this.gameWindow.sendToConsole(`Endpoint ${i+1} is unavailable.`);
                 console.log(`Endpoint ${endpoint} is unavailable.`);
             }
         }
