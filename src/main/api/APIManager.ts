@@ -6,15 +6,39 @@ import { LogHelper } from '../helpers/LogHelper';
 
 @Service()
 export class APIManager {
-    private api = new AuroraAPI(apiConfig.ws || 'ws://localhost:1370', {
-        onClose: () => setTimeout(() => this.initConnection(), 5000),
-    });
+    private currentEndpointIndex = 0;
+    private readonly endpoints = [
+        apiConfig.ws || 'ws://185.72.144.212:1370/ws',
+        'ws://65.109.31.100:1370/ws',
+        'ws://localhost:1370'
+    ];
+    
+    private api!: AuroraAPI;
+
+    constructor() {
+        this.createApiInstance();
+    }
+
+    private createApiInstance() {
+        const currentEndpoint = this.endpoints[this.currentEndpointIndex];
+        this.api = new AuroraAPI(currentEndpoint, {
+            onClose: () => setTimeout(() => this.initConnection(), 5000),
+        });
+    }
+
+    private rotateEndpoint() {
+        this.currentEndpointIndex = (this.currentEndpointIndex + 1) % this.endpoints.length;
+        LogHelper.debug(`Switching to endpoint: ${this.endpoints[this.currentEndpointIndex]}`);
+        this.createApiInstance();
+    }
 
     async initConnection() {
         try {
             await this.api.connect();
         } catch (error) {
-            LogHelper.error(error);
+            LogHelper.error(`Connection failed to ${this.endpoints[this.currentEndpointIndex]}: ${error}`);
+            this.rotateEndpoint();
+            await this.initConnection(); // Попробовать снова с новым endpoint
         }
     }
 

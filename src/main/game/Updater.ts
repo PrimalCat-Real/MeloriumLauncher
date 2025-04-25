@@ -19,12 +19,73 @@ import { LibrariesMatcher } from './LibrariesMatcher';
 
 @Service()
 export class Updater {
+    private currentHttpEndpointIndex = 0;
+    private readonly httpEndpoints = [
+        apiConfig.web || 'http://185.72.144.212:1370',
+        'http://65.109.31.100:1370',
+        'http://localhost:1370'
+    ];
+    private requestTimeout = 5000;
     constructor(
         private api: APIManager,
         private gameWindow: GameWindow,
     ) {}
 
+    private async initializeHttpEndpoint(): Promise<void> {
+        this.gameWindow.sendToConsole('Checking endpoints');
+        for (let i = 0; i < this.httpEndpoints.length; i++) {
+            const endpoint = this.httpEndpoints[i];
+            const isAvailable = await this.checkEndpointAvailability(endpoint, this.requestTimeout);
+    
+            if (isAvailable) {
+                this.currentHttpEndpointIndex = i;
+                this.gameWindow.sendToConsole(`Using endpoint ${i}`);
+                console.log(`Using endpoint: ${endpoint}`);
+                return;
+            } else {
+                this.gameWindow.sendToConsole(`Endpoint ${i} is unavailable.`);
+                console.log(`Endpoint ${endpoint} is unavailable.`);
+            }
+        }
+    
+        console.error('All HTTP endpoints are unavailable!');
+    }
+    
+    private async checkEndpointAvailability(url: string, timeout: number = 5000): Promise<boolean> {
+        try {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeout);
+    
+            await fetch(url, { signal: controller.signal });
+            clearTimeout(id);
+    
+            return true;
+        } catch (error: any) {
+            if (error.name === 'AbortError') {
+                console.log(`Request to ${url} timed out.`);
+            } else {
+                console.error(`Error checking endpoint ${url}:`, error.message);
+            }
+            return false;
+        }
+    }
+
+    // private async initializeHttpEndpoint(): Promise<void> {
+    //     const testUrl = `${this.httpEndpoints[0]}/status`; // предполагаем, что есть endpoint /status
+    //     const isAvailable = await this.checkEndpointAvailability(testUrl, this.requestTimeout);
+    
+    //     if (!isAvailable) {
+    //         this.currentHttpEndpointIndex = 1; // fallback на 65.109.31.100
+    //         console.log(`Primary endpoint is unavailable. Switched to: ${this.httpEndpoints[1]}`);
+    //     } else {
+    //         console.log(`Primary endpoint is available: ${this.httpEndpoints[0]}`);
+    //     }
+    // }
+    
+    
+
     async validateClient(clientArgs: Profile): Promise<void> {
+        await this.initializeHttpEndpoint();
         await this.validateAssets(clientArgs);
         await this.validateLibraries(clientArgs);
         await this.validateGameFiles(clientArgs);
@@ -152,34 +213,13 @@ export class Updater {
     ): URL {
         return new URL(
             `files/${type}/${path.replace('\\', '/')}`,
-            apiConfig.web,
+            this.httpEndpoints[this.currentHttpEndpointIndex],
         );
     }
-
-    // async validateAndDownloadFile(
-    //     path: string,
-    //     sha1: string,
-    //     rootDir: string,
-    //     type: 'clients' | 'libraries' | 'assets',
-    // ): Promise<void> {
-    //     const filePath = join(rootDir, path);
-    //     mkdirSync(dirname(filePath), { recursive: true });
-
-    //     const fileUrl = this.getFileUrl(path, type);
-
-    //     try {
-    //         const fileHash = await HashHelper.getHashFromFile(filePath, 'sha1');
-    //         if (fileHash === sha1) return;
-    //     } catch (error) {
-    //         // ignore not found file
-    //     }
-
-    //     try {
-    //         await HttpHelper.downloadFile(fileUrl, filePath);
-    //     } catch (error) {
-    //         throw new Error(`file ${fileUrl} not found`);
-    //     }
-    // }
+    private async rotateHttpEndpoint() {
+        this.currentHttpEndpointIndex = (this.currentHttpEndpointIndex + 1) % this.httpEndpoints.length;
+        console.log(`Switching HTTP endpoint to: ${this.httpEndpoints[this.currentHttpEndpointIndex]}`);
+    }
     async validateAndDownloadFile(
         path: string,
         sha1: string,

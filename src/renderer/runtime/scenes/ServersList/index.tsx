@@ -39,8 +39,8 @@ export default function ServersList() {
         await launcherAPI.scenes.serversList.getServers();
         await launcherAPI.scenes.serversList.selectServer(server);
         
-        console.log(JSON.stringify(launcherAPI.scenes.serverPanel.getProfile, null, 2));
-        console.log(JSON.stringify(launcherAPI.scenes.serverPanel.getServer, null, 2));
+        // console.log(JSON.stringify(launcherAPI.scenes.serverPanel.getProfile, null, 2));
+        // console.log(JSON.stringify(launcherAPI.scenes.serverPanel.getServer, null, 2));
         navigate('/ServerPanel');
     };
     const players = usePingServer({
@@ -67,14 +67,6 @@ export default function ServersList() {
         //     </div>
         // </div>
         <div className="flex flex-col items-center justify-start py-4">
-            <div className='absolute right-5 bottom-5 flex flex-col'>
-                <h2>{apiResult}</h2>
-                {/* <h2>{api.web}</h2> */}
-                {/* <Button onClick={() => {navigate('/ServerPanel')}}>Next</Button> */}
-                {servers.map((server, i) => (
-                    <h2>{server.title || "None"}</h2>
-                ))}
-            </div>
             <img className='h-[220px]' src={titleImg} alt="" />
             <p className='text-center font-sans text-xl font-semibold uppercase'>РАСКРОЙ ВСЕ ТАЙНЫ<br></br>ЗАГАДОЧНОГО КОРОЛЕВСТВА!</p>
             <div className='flex flex-col gap-10 items-center mt-10'>
