@@ -271,11 +271,16 @@ import path from "path";
 
 async function getDisabledMods(modsDir: string): Promise<string[]> {
     const modsPath = join(StorageHelper.clientsDir, 'Melorium', 'mods');
+    
+    // Создаём директорию, если не существует
+    await fs.mkdir(modsPath, { recursive: true });
+
     const files = await fs.readdir(modsPath);
     return files
         .filter(f => f.endsWith(".disabled"))
         .map(f => f.replace(/\.disabled$/, ""));
 }
+
 
 
 // TODO: Move to @aurora-launcher/core
