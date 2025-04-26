@@ -24,6 +24,9 @@ const modDependencies: Record<string, string[]> = {
     "sodiumdynamiclights-fabric-1.0.10-1.21.4.jar": ["sodium-fabric-0.6.13+mc1.21.4.jar"],
     "iris-fabric-1.8.8+mc1.21.4.jar": ["sodium-fabric-0.6.13+mc1.21.4.jar"],
     "XaerosWorldMap_1.39.4_Fabric_1.21.4.jar": ["Xaeros_Minimap_25.2.0_Fabric_1.21.4.jar"],
+    "emotecraft-flashback-addon-1.0+mc1.21.1.jar": ["emotecraft-fabric-for-MC1.21.4-2.5.6.jar", "Flashback-0.31.0-for-MC1.21.4.jar", "fabric-language-kotlin-1.13.2+kotlin.2.1.20.jar"],
+    "AmbientSounds_FABRIC_v6.1.3_mc1.21.4.jar": ["CreativeCore_FABRIC_v2.12.35_mc1.21.4.jar"],
+    "Flashback-0.31.0-for-MC1.21.4.jar": ["fabric-language-kotlin-1.13.2+kotlin.2.1.20.jar"],
 };
 
 type ModItem = {
