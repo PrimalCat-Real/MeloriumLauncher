@@ -244,9 +244,9 @@ export class Updater {
         try {
             
             let shouldDownload = true;
-            if(path.includes("options.txt")){
-                shouldDownload = false;
-            }
+            // if(path.includes("options.txt")){
+            //     shouldDownload = false;
+            // }
             // if(path.includes("options")){
             //     shouldDownload = false;
             // }
