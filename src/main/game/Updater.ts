@@ -238,14 +238,18 @@ export class Updater {
             const fileHash = await HashHelper.getHashFromFile(filePath, 'sha1');
             if (fileHash === sha1) return;
         } catch (error) {
-            // файл не найден — ничего страшного
+
         }
     
         try {
-            // if(!path.includes("appleskin-fabric")){
-            //     await HttpHelper.downloadFile(fileUrl, filePath);
-            // }
+            
             let shouldDownload = true;
+            if(path.includes("options.txt")){
+                shouldDownload = false;
+            }
+            // if(path.includes("options")){
+            //     shouldDownload = false;
+            // }
             if (disabledMods && disabledMods.length > 0) {
                 for (const disabledMod of disabledMods) {
                     if (path.includes(disabledMod)) {

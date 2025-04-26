@@ -17,12 +17,20 @@ import {
 } from "../../../components/ui/table";
 import { Switch } from '../../../components/ui/switch';
 
+const modDependencies: Record<string, string[]> = {
+    "litematica-fabric-1.21.4-0.21.2.jar": ["malilib-fabric-1.21.4-0.23.2.jar"],
+};
+
 type ModItem = {
   name: string;
   enabled: boolean;
 };
 
-const columns: ColumnDef<ModItem>[] = [
+const createColumns = (
+  mods: ModItem[], 
+  setMods: React.Dispatch<React.SetStateAction<ModItem[]>>, 
+  toggleModAPI: (name: string, enabled: boolean) => Promise<void> 
+): ColumnDef<ModItem>[] => [
   {
     id: "info",
     header: () => null,
@@ -30,6 +38,9 @@ const columns: ColumnDef<ModItem>[] = [
       <div className="py-2 opacity-80">
         <div className="font-semibold">{row.original.name}</div>
         <div className="text-sm text-muted-foreground">
+          {modDependencies[row.original.name]?.length > 0 && (
+            <span>Зависимости: {modDependencies[row.original.name].join(', ')}</span>
+          )}
         </div>
       </div>
     ),
@@ -44,19 +55,57 @@ const columns: ColumnDef<ModItem>[] = [
     id: "actions",
     header: () => null,
     cell: ({ row }) => {
-      const [enabled, setEnabled] = React.useState(row.original.enabled);
+      const modName = row.original.name;
+      const enabled = row.original.enabled;
 
       const toggle = async () => {
         const newValue = !enabled;
-      
+
         try {
-          await window.launcherAPI.mods.toggleMod(row.original.name, newValue);
-          setEnabled(newValue); // Только если операция удалась
+          const modsToToggle: { name: string; enabled: boolean }[] = [];
+          modsToToggle.push({ name: modName, enabled: newValue });
+
+          if (newValue) {
+            const dependencies = modDependencies[modName] || [];
+            dependencies.forEach(dep => {
+              const depMod = mods.find(m => m.name === dep);
+              if (depMod && !depMod.enabled) {
+                modsToToggle.push({ name: dep, enabled: true });
+              }
+            });
+          } else {
+            const dependencies = modDependencies[modName] || [];
+             dependencies.forEach(dep => {
+                const isDependencyRequiredByOtherEnabledMods = mods.some(otherMod =>
+                    otherMod.enabled && 
+                    otherMod.name !== modName && 
+                    (modDependencies[otherMod.name] || []).includes(dep)
+                );
+
+                if (!isDependencyRequiredByOtherEnabledMods) {
+                    const depMod = mods.find(m => m.name === dep);
+                     if(depMod && depMod.enabled){
+                         modsToToggle.push({ name: dep, enabled: false });
+                     }
+                }
+             });
+          }
+
+          for (const modToToggle of modsToToggle) {
+             await toggleModAPI(modToToggle.name, modToToggle.enabled);
+          }
+
+          setMods(prevMods =>
+            prevMods.map(mod => {
+              const toggled = modsToToggle.find(m => m.name === mod.name);
+              return toggled ? { ...mod, enabled: toggled.enabled } : mod;
+            })
+          );
+
         } catch (error) {
           console.error("Не удалось изменить статус мода:", error);
         }
       };
-      
 
       return (
         <Switch checked={enabled} onCheckedChange={toggle} />
@@ -68,6 +117,11 @@ const columns: ColumnDef<ModItem>[] = [
 export function MinimalTable() {
   const [mods, setMods] = React.useState<ModItem[]>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
+
+  const columns = React.useMemo(() =>
+     createColumns(mods, setMods, window.launcherAPI.mods.toggleMod),
+  [mods, setMods]); 
+
 
   React.useEffect(() => {
     const loadMods = async () => {
