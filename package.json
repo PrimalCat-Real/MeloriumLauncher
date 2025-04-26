@@ -1,6 +1,6 @@
 {
     "name": "melorium",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Laucnher for Melorium minecraft server",
     "author": "PrimalCat",
     "main": "build/main/index.cjs",

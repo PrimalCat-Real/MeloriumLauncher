@@ -19,6 +19,11 @@ import { Switch } from '../../../components/ui/switch';
 
 const modDependencies: Record<string, string[]> = {
     "litematica-fabric-1.21.4-0.21.2.jar": ["malilib-fabric-1.21.4-0.23.2.jar"],
+    "fallingleaves-1.17.0+1.21.4.jar": ["cloth-config-17.0.144-fabric.jar"],
+    "sodium-extra-fabric-0.6.1+mc1.21.4.jar": ["sodium-fabric-0.6.13+mc1.21.4.jar"],
+    "sodiumdynamiclights-fabric-1.0.10-1.21.4.jar": ["sodium-fabric-0.6.13+mc1.21.4.jar"],
+    "iris-fabric-1.8.8+mc1.21.4.jar": ["sodium-fabric-0.6.13+mc1.21.4.jar"],
+    "XaerosWorldMap_1.39.4_Fabric_1.21.4.jar": ["Xaeros_Minimap_25.2.0_Fabric_1.21.4.jar"],
 };
 
 type ModItem = {
