@@ -26,7 +26,7 @@ export class Starter {
         private authlibInjector: AuthlibInjector,
     ) {}
 
-    async start(clientArgs: Profile): Promise<void> {
+    async start(clientArgs: Profile, selectedRamMB?: number): Promise<void> {
         const clientDir = join(StorageHelper.clientsDir, clientArgs.clientDir);
 
         const clientVersion = coerce(clientArgs.version);
@@ -71,6 +71,17 @@ export class Starter {
         classPath.push(join(clientDir, clientArgs.gameJar));
 
         const jvmArgs = [];
+
+        LogHelper.info('Starting game ram', selectedRamMB);
+        if (selectedRamMB && selectedRamMB >= 1024) {
+            jvmArgs.push(`-Xmx${selectedRamMB}M`);
+            const initialRamMB = Math.max(1024, Math.floor(selectedRamMB / 2));
+            jvmArgs.push(`-Xms${initialRamMB}M`);
+            LogHelper.info(`Setting JVM RAM from selection: -Xmx${selectedRamMB}M -Xms${initialRamMB}M`);
+        } else {
+            LogHelper.warn(`Invalid or no RAM value provided (${selectedRamMB}MB). Relying on profile args or JVM defaults.`);
+        }
+        LogHelper.info('Starting game with JVM arguments:', jvmArgs.join(' '));
 
         await this.authlibInjector.verify();
         jvmArgs.push(

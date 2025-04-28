@@ -21,11 +21,11 @@ import { LibrariesMatcher } from './LibrariesMatcher';
 export class Updater {
     private currentHttpEndpointIndex = 0;
     private readonly httpEndpoints = [
-        apiConfig.web || 'http://185.72.144.212:1370',
+        // apiConfig.web || 'http://185.72.144.212:1370',
         'http://65.109.31.100:1370',
-        'http://localhost:1370'
+        'http://185.72.144.212:1370'
     ];
-    private requestTimeout = 5000;
+    private requestTimeout = 3000;
     constructor(
         private api: APIManager,
         private gameWindow: GameWindow,

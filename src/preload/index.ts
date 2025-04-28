@@ -3,15 +3,22 @@ import ServerPanel from './components/ServerPanelScene';
 import ServersList from './components/ServersListScene';
 import Window from './components/Window';
 
-// export для типизации
 import { contextBridge, ipcRenderer } from 'electron';
 
-// Добавим новые методы для работы с модами
 const modsAPI = {
   getMods: () => ipcRenderer.invoke('get-mods'),
   toggleMod: (modName: string, enable: boolean) =>
     ipcRenderer.invoke('toggle-mod', modName, enable),
 };
+
+const systemAPI = {
+  getRamMB: () => ipcRenderer.invoke('get-system-ram-mb'),
+};
+
+const gameAPI = {
+  setRam: (ramMb: number) => ipcRenderer.invoke('set-game-ram', ramMb)
+};
+
 
 export const API = {
   window: {
@@ -32,7 +39,9 @@ export const API = {
       startGame: ServerPanel.startGame,
     },
   },
+  game: gameAPI,
   mods: modsAPI, 
+  system: systemAPI,
 };
 
 contextBridge.exposeInMainWorld('launcherAPI', API);

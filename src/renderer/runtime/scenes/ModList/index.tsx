@@ -16,6 +16,8 @@ import {
   TableRow,
 } from "../../../components/ui/table";
 import { Switch } from '../../../components/ui/switch';
+import RamSelector from '../../components/RamSelector';
+
 
 const modDependencies: Record<string, string[]> = {
     "litematica-fabric-1.21.4-0.21.2.jar": ["malilib-fabric-1.21.4-0.23.2.jar"],
@@ -153,7 +155,9 @@ export function MinimalTable() {
 
   return (
     <div className="w-full">
-      <div className="py-4">
+      
+      <div className="py-4 flex w-full gap-10">
+        
         <Input
           placeholder="Поиск..."
           value={(table.getColumn("info")?.getFilterValue() as string) ?? ""}
@@ -162,6 +166,8 @@ export function MinimalTable() {
           }
           className="max-w-sm text-start bg-accent border-transparent font-sans"
         />
+        <RamSelector></RamSelector>
+        
       </div>
       <div className="space-y-2 max-h-[73vh] overflow-auto">
         {table.getRowModel().rows.map((row) => (

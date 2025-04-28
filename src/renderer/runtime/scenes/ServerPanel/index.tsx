@@ -9,6 +9,8 @@ import { usePingServer } from '../../hooks/pingServer';
 import { Button } from '../../../components/ui/button';
 import { Progress } from '../../../components/ui/progress';
 import titleImg from '@/assets/images/title.png';
+import { useRecoilValue } from 'recoil';
+import { selectedRamState } from '../../state/systemInfo';
 // TODO Refactoring scene
 export default function ServerPanel() {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -24,6 +26,8 @@ export default function ServerPanel() {
     const progressLine = useRef() as MutableRefObject<HTMLDivElement>;
     const progressInfo = useRef() as MutableRefObject<HTMLDivElement>;
 
+    const currentSelectedRam = useRecoilValue(selectedRamState);
+
     const { showTitlebarBackBtn, hideTitlebarBackBtn } = useTitlebar();
 
     useEffect(() => {
@@ -33,7 +37,18 @@ export default function ServerPanel() {
         showTitlebarBackBtn();
     }, []);
 
-    const startGame = () => {
+    const startGame = async () => {
+        console.log(`[ServerPanel] Starting game with selected RAM: ${currentSelectedRam}MB (from Recoil)`);
+
+        try {
+            if (window.launcherAPI?.game?.setRam) {
+                await window.launcherAPI.game.setRam(currentSelectedRam);
+            } else {
+                console.warn('[ServerPanel] launcherAPI.game.setRam not available.');
+            }
+        } catch (error) {
+            console.error("[ServerPanel] Failed to set RAM via IPC:", error);
+        }
         hideTitlebarBackBtn();
         setShowConsole(true);
         consoleRef.current?.replaceChildren();

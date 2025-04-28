@@ -5,6 +5,7 @@ import 'reflect-metadata';
 import { Container } from 'typedi';
 import { Launcher } from './core/Launcher';
 import { registerModHandlers } from './ipc/Mods';
+import { registerSystemInfoHandlers } from './ipc/SystemInfo';
 
 let launcher;
 
@@ -13,6 +14,7 @@ let launcher;
     
 // }
 registerModHandlers();
+registerSystemInfoHandlers();
 
 // bootstrap();
 launcher = Container.get(Launcher);

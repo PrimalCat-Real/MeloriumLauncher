@@ -8,9 +8,9 @@ import { LogHelper } from '../helpers/LogHelper';
 export class APIManager {
     private currentEndpointIndex = 0;
     private readonly endpoints = [
-        apiConfig.ws || 'ws://185.72.144.212:1370/ws',//65.109.31.100:1370/ws
+        // apiConfig.ws || 'ws://185.72.144.212:1370/ws',//65.109.31.100:1370/ws
         'ws:/65.109.31.100:1370/ws',
-        'ws://localhost:1370'
+        'ws://185.72.144.212:1370/ws'
     ];
     
     private api!: AuroraAPI;
@@ -22,7 +22,7 @@ export class APIManager {
     private createApiInstance() {
         const currentEndpoint = this.endpoints[this.currentEndpointIndex];
         this.api = new AuroraAPI(currentEndpoint, {
-            onClose: () => setTimeout(() => this.initConnection(), 5000),
+            onClose: () => setTimeout(() => this.initConnection(), 3000),
         });
     }
 
