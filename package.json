@@ -1,6 +1,6 @@
 {
     "name": "melorium",
-    "version": "0.1.6",
+    "version": "0.1.7",
     "description": "Laucnher for Melorium minecraft server",
     "author": "PrimalCat",
     "main": "build/main/index.cjs",
@@ -23,6 +23,7 @@
         "pack": "electron-builder --dir",
         "release": "electron-builder --publish always",
         "release:dry": "electron-builder --publish onTagOrDraft",
+        "release:mac": "electron-builder -mwl",
         "obf": "javascript-obfuscator build/main/index.js --output build/main/index-obf.js --split-strings-chunk-length 8",
         "bytenode": "bytenode -c build/main/index-obf.js -e"
     },
