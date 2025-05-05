@@ -1,8 +1,9 @@
 import { mkdirSync } from 'fs';
 import { writeFile } from 'fs/promises';
-import { dirname, join } from 'path';
+import { basename, dirname, join } from 'path';
 
 import {
+    HashedFile,
     HashHelper,
     HttpHelper,
     JsonHelper,
@@ -169,12 +170,100 @@ export class Updater {
 
     async validateGameFiles(clientArgs: Profile): Promise<void> {
         this.gameWindow.sendToConsole('Load client files');
-        const disabledMods = await getDisabledMods("mods");
+    
+        // Define mods directory path, matching the hardcoded path in getAllLocalModsInfo
+        const modsDir = join(StorageHelper.clientsDir, 'Melorium', 'mods');
+        await fs.mkdir(modsDir, { recursive: true });
+    
+        // Get BASE names of disabled mods
+        const disabledModsBaseNames = await getDisabledMods(modsDir);
+        const disabledModBaseNamesSet = new Set(disabledModsBaseNames); // Use Set for efficient lookup
+    
         const hashes = await this.api.getUpdates(clientArgs.clientDir);
-        if (!hashes) {
-            throw new Error('Client not found');
+        const serverMods: HashedFile[] = hashes.filter((file: HashedFile) => file.path.includes('mods/'));
+    
+        // Get expected BASE names from server mods
+        const cleanedModsWith = serverMods.map((modFile: HashedFile) => {
+            const modPath: string = modFile.path;
+            const modSize: number = modFile.size;
+            const modHash: string = modFile.sha1;
+            const lastSlashIndex = modPath.lastIndexOf('/');
+            let filename = lastSlashIndex === -1 ? modPath : modPath.substring(lastSlashIndex + 1);
+    
+            // Extract base name (remove .jar.disabled first, then .jar)
+            if (filename.endsWith('.disabled')) {
+                filename = filename.slice(0, -9);
+            }
+            if (filename.endsWith('.jar')) {
+                 filename = filename.slice(0, -4);
+            }
+            return { name: filename, hash: modHash, size: modSize }; // name is the base name
+        });
+        const expectedModBaseNames = new Set(cleanedModsWith.map((mod) => mod.name)); // Set of expected base names
+    
+        LogHelper.info('Expected mods from server (base names):');
+        LogHelper.info(Array.from(expectedModBaseNames)); 
+        LogHelper.info('Disabled mods (base names):');
+        LogHelper.info(Array.from(disabledModBaseNamesSet)); 
+    
+        this.gameWindow.sendToConsole('Checking local mods folder...');
+        try {
+            const localFilenames = await getAllLocalModsInfo(modsDir);
+            LogHelper.info(
+                `Found ${localFilenames.length} files/folders locally in ${modsDir}`,
+            );
+    
+            const deletePromises: Promise<void>[] = [];
+    
+            for (const localFilename of localFilenames) {
+                let localBaseName = '';
+                let isModFile = false;
+    
+                if (localFilename.endsWith('.jar.disabled')) {
+                    localBaseName = localFilename.slice(0, -13);
+                    isModFile = true;
+                } else if (localFilename.endsWith('.jar')) {
+                    localBaseName = localFilename.slice(0, -4);
+                    isModFile = true;
+                }
+    
+                if (isModFile) {
+                    if (
+                        !disabledModBaseNamesSet.has(localBaseName) &&
+                        !expectedModBaseNames.has(localBaseName)
+                    ) {
+                        const filePathToDelete = join(modsDir, localFilename);
+                        LogHelper.info(
+                            `Deleting file (neither disabled nor expected): ${localFilename}`,
+                        );
+                        this.gameWindow.sendToConsole(
+                            `Removing: ${localFilename}`,
+                        );
+                        deletePromises.push(
+                            fs.unlink(filePathToDelete).catch((err) => {
+                                LogHelper.error(
+                                    `Failed to delete ${filePathToDelete}: ${
+                                        (err as Error).message
+                                    }`,
+                                );
+                            }),
+                        );
+                    }
+                }
+            }
+    
+            await Promise.all(deletePromises);
+            this.gameWindow.sendToConsole('Finished checking local mods folder.');
+    
+        } catch (error: any) {
+             LogHelper.error(
+                 `Error during local mods check in ${modsDir}: ${error.message}`,
+             );
+             this.gameWindow.sendToConsole(
+                 `Error checking mods folder: ${error.message}`,
+             );
+             // throw error; // Optional: stop execution if cleaning fails
         }
-
         hashes.sort(
             (a: { size: number }, b: { size: number }) => b.size - a.size,
         );
@@ -195,7 +284,7 @@ export class Updater {
                     hash.sha1,
                     StorageHelper.clientsDir,
                     'clients',
-                    disabledMods
+                    disabledModsBaseNames
                 );
 
                 this.gameWindow.sendProgress({
@@ -273,11 +362,11 @@ export class Updater {
 
 import fs from "fs/promises";
 import path from "path";
+import { LogHelper } from 'main/helpers/LogHelper';
 
 async function getDisabledMods(modsDir: string): Promise<string[]> {
     const modsPath = join(StorageHelper.clientsDir, 'Melorium', 'mods');
     
-    // Создаём директорию, если не существует
     await fs.mkdir(modsPath, { recursive: true });
 
     const files = await fs.readdir(modsPath);
@@ -286,6 +375,14 @@ async function getDisabledMods(modsDir: string): Promise<string[]> {
         .map(f => f.replace(/\.disabled$/, ""));
 }
 
+async function getAllLocalModsInfo(modsDir: string): Promise<string[]> {
+    const modsPath = join(StorageHelper.clientsDir, 'Melorium', 'mods');
+    
+    await fs.mkdir(modsPath, { recursive: true });
+
+    const files = await fs.readdir(modsPath);
+    return files
+}
 
 
 // TODO: Move to @aurora-launcher/core
