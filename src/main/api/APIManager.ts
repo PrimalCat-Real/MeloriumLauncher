@@ -9,7 +9,7 @@ export class APIManager {
     private currentEndpointIndex = 0;
     private readonly endpoints = [
         // apiConfig.ws || 'ws://185.72.144.212:1370/ws',//65.109.31.100:1370/ws
-        'ws://185.72.144.212:1370/ws',
+        'ws://154.194.53.177:1370/ws',
         'ws:/65.109.31.100:1370/ws'
         
     ];

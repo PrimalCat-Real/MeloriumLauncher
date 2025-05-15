@@ -24,7 +24,7 @@ export class Updater {
     private readonly httpEndpoints = [
         // apiConfig.web || 'http://185.72.144.212:1370',
         
-        'http://185.72.144.212:1370',
+        'http://154.194.53.177:1370',
         'http://65.109.31.100:1370',
     ];
     private requestTimeout = 3000;
