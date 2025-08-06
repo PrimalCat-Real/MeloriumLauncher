@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { FILES_TO_SKIP_WORKTREE } from "./config";
-
+import { toast, type Toaster } from "sonner";
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
@@ -60,7 +60,7 @@ export function getParents(modId: string, allMods: Mod[]): string[] {
 }
 
 
-export const handleIgnoreClientSettings = async (gameDir: string, toast: unknown) =>{
+export const handleIgnoreClientSettings = async (gameDir: string,  toaster: typeof toast) =>{
     try {
         await invoke('skip_worktree', {
           args: {
@@ -70,7 +70,7 @@ export const handleIgnoreClientSettings = async (gameDir: string, toast: unknown
         });
         console.log("Файлы добавлены в исключение:", FILES_TO_SKIP_WORKTREE);
     } catch (e) {
-      toast.error("Не удалось добавить файлы в skip-worktree:", {
+      toaster.error("Не удалось добавить файлы в skip-worktree:", {
         description: String(e),
       });
     }
