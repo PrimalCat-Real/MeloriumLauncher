@@ -6,6 +6,7 @@ import ModsTable from '../mods/ModsTable'
 import Logo from './Logo'
 import MinimizaButton from './MinimizaButton'
 import CloseButton from './CloseButton'
+import Logout from '../login/logout'
 
 const Header = () => {
   return (
@@ -17,6 +18,7 @@ const Header = () => {
             <ModsDrawer>
               <ModsTable></ModsTable>
           </ModsDrawer>
+          <Logout></Logout>
         </div>
     </header>
   )

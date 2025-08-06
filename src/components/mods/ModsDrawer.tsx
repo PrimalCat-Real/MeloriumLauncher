@@ -4,17 +4,20 @@ import { Button } from '../ui/button'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import bg from '@/assets/images/background.png'
-import { ArrowLeftToLine } from 'lucide-react'
+import { ArrowLeftToLine, Settings } from 'lucide-react'
 import RamSelector from './RamSelector'
 import MinimizaButton from '../header/MinimizaButton'
 import CloseButton from '../header/CloseButton'
+import Logout from '../login/logout'
 
 const ModsDrawer = ({children}: {children: ReactNode}) => {
   const [open, setOpen] = useState(false)
 
   return (
     <div>
-      <Button className='h-8' variant={"outline"} onClick={() => setOpen(true)}>Mods</Button>
+      <Button className='h-8 w-8' variant={"outline"} onClick={() => setOpen(true)}>
+        <Settings />
+      </Button>
       <AnimatePresence>
         {open && (
 
@@ -33,6 +36,7 @@ const ModsDrawer = ({children}: {children: ReactNode}) => {
                   <div className='flex gap-2 items-center'>
                     <MinimizaButton className='h-8 w-8'></MinimizaButton>
                     <CloseButton className='h-8 w-8'></CloseButton>
+                    <Logout></Logout>
                   </div>
                   
                 </div>

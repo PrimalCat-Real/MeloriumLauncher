@@ -8,7 +8,6 @@
     "start": "next start",
     "tauri": "tauri",
     "lint": "next lint"
-
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.14",
@@ -24,6 +23,7 @@
     "@tanstack/react-table": "^8.21.3",
     "@tauri-apps/api": "^2.6.0",
     "@tauri-apps/plugin-dialog": "^2.3.0",
+    "@tauri-apps/plugin-updater": "^2.9.0",
     "axios": "^1.11.0",
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.1",

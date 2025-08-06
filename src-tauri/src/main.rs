@@ -3,21 +3,23 @@
 
 use serde::Deserialize;
 use std::process::Stdio;
+use std::{path::Path, time::Duration};
 use std::{path::PathBuf, sync::Arc};
 use tauri::async_runtime::spawn;
 use tauri::{window, AppHandle, Emitter, Manager, State, Window};
 use tokio::process::Command;
-use std::{path::Path, time::Duration};
 use tokio::time::sleep;
 
 mod utils;
-use utils::{get_local_version_json, is_dir_empty, get_total_memory_mb, toggle_mod_file, list_mod_jar_files};
+use utils::{
+    get_local_version_json, get_total_memory_mb, is_dir_empty, list_mod_jar_files, toggle_mod_file,
+};
 
 mod rungame;
-use rungame::{launch_minecraft};
+use rungame::launch_minecraft;
 
 mod auth;
-use auth::{authenticate};
+use auth::authenticate;
 
 #[derive(Deserialize)]
 struct GitCloneArgs {
@@ -212,13 +214,11 @@ async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> {
 //     }
 // }
 
-
 #[derive(Deserialize)]
 struct ResetRepoArgs {
     git_path: String,
     repo_path: String,
 }
-
 
 #[tauri::command]
 async fn reset_repo(_window: tauri::Window, args: ResetRepoArgs) -> Result<(), String> {
@@ -270,7 +270,6 @@ async fn reset_repo(_window: tauri::Window, args: ResetRepoArgs) -> Result<(), S
 
     Ok(())
 }
-
 
 #[derive(Deserialize)]
 struct AssumeUnchangedArgs {
@@ -453,10 +452,8 @@ async fn skip_worktree(args: AssumeUnchangedArgs) -> Result<(), String> {
 //         }
 //     }
 
-
 //     Ok(())
 // }
-
 
 #[derive(Deserialize)]
 struct GitCheckUpdateArgs {
@@ -500,8 +497,12 @@ async fn check_git_update(args: GitCheckUpdateArgs) -> Result<bool, String> {
         .await
         .map_err(|e| format!("Failed to get remote hash: {}", e))?;
 
-    let local_hash = String::from_utf8_lossy(&local_output.stdout).trim().to_string();
-    let remote_hash = String::from_utf8_lossy(&remote_output.stdout).trim().to_string();
+    let local_hash = String::from_utf8_lossy(&local_output.stdout)
+        .trim()
+        .to_string();
+    let remote_hash = String::from_utf8_lossy(&remote_output.stdout)
+        .trim()
+        .to_string();
 
     // println!("Local hash: {}", local_hash);
     // println!("Remote hash: {}", remote_hash);
@@ -515,9 +516,9 @@ async fn check_git_update(args: GitCheckUpdateArgs) -> Result<bool, String> {
     Ok(local_hash != remote_hash)
 }
 
-
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             clone_repo,

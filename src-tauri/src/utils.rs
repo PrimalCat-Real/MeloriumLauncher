@@ -1,18 +1,16 @@
-use sysinfo::{System};
-use tokio::fs;
-use tokio_stream::StreamExt;
-use tokio::fs::read_to_string;
 use std::path::Path;
 use std::path::PathBuf;
+use sysinfo::System;
+use tokio::fs;
+use tokio::fs::read_to_string;
+use tokio_stream::StreamExt;
 
 #[tauri::command]
 pub async fn get_local_version_json(path: String) -> Result<String, String> {
-    
     read_to_string(path)
         .await
         .map_err(|e| format!("Failed to read local version: {}", e))
 }
-
 
 #[tauri::command]
 pub async fn is_dir_empty(path: String) -> Result<bool, String> {
@@ -26,7 +24,6 @@ pub async fn is_dir_empty(path: String) -> Result<bool, String> {
     }
     Ok(true)
 }
-
 
 #[tauri::command]
 pub fn get_total_memory_mb() -> Result<u64, String> {
@@ -55,14 +52,12 @@ pub fn get_total_memory_mb() -> Result<u64, String> {
 //         return Ok(());
 //     }
 
-    // fs::rename(src, dst).await
-    //     .map_err(|e| format!("Не удалось переименовать мод: {}", e))
+// fs::rename(src, dst).await
+//     .map_err(|e| format!("Не удалось переименовать мод: {}", e))
 // }
-
 
 #[tauri::command]
 pub async fn toggle_mod_file(path: String, enable: bool) -> Result<(), String> {
-
     // Err(format!("Путь: {}", path))
     let jar_path = Path::new(&path).with_extension("jar");
 
@@ -76,7 +71,7 @@ pub async fn toggle_mod_file(path: String, enable: bool) -> Result<(), String> {
     //     enable
     // );
     let (current, target) = if enable {
-        (&disabled_path, &jar_path) 
+        (&disabled_path, &jar_path)
     } else {
         (&jar_path, &disabled_path)
     };

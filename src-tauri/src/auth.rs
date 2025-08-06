@@ -4,8 +4,6 @@ use bcrypt::verify;
 use tauri::command;
 use tokio_postgres::NoTls;
 
-
-
 #[derive(serde::Serialize)]
 pub struct AuthResult {
     is_authenticated: bool,
@@ -14,10 +12,8 @@ pub struct AuthResult {
     error: Option<String>,
 }
 
-
 #[command]
 pub async fn authenticate(login: String, password: String) -> Result<AuthResult, String> {
-
     dotenvy::dotenv().ok();
 
     let db_url = format!(
@@ -45,7 +41,8 @@ pub async fn authenticate(login: String, password: String) -> Result<AuthResult,
         WHERE user_login = $1
     ";
 
-    let row_opt = client.query_opt(query, &[&login])
+    let row_opt = client
+        .query_opt(query, &[&login])
         .await
         .map_err(|e| format!("Ошибка запроса: {}", e))?;
 

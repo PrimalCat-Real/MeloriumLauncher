@@ -43,6 +43,8 @@ jobs:
 
       - name: 🏗️ Build Tauri app
         run: npm run tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
 
       - name: 🚀 Upload release artifacts
         uses: softprops/action-gh-release@v2
@@ -51,4 +53,5 @@ jobs:
             src-tauri/target/release/bundle/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          
 

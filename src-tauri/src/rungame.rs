@@ -1,30 +1,29 @@
 use serde::Deserialize;
-use tauri::Emitter;
-use std::{fs, path::PathBuf, process::Stdio};
-use tokio::process::Command;
 use std::path::Path;
+use std::{fs, path::PathBuf, process::Stdio};
+use tauri::Emitter;
+use tokio::process::Command;
 
 #[derive(Deserialize)]
 pub struct MinecraftLaunchArgs {
     java_path: String,
     args_content: String,
     args_file_path: String,
-    game_dir: String
+    game_dir: String,
 }
 
 #[tauri::command]
-pub async fn launch_minecraft(window: tauri::Window, args: MinecraftLaunchArgs) -> Result<(), String> {
-
+pub async fn launch_minecraft(
+    window: tauri::Window,
+    args: MinecraftLaunchArgs,
+) -> Result<(), String> {
     let path = Path::new(&args.args_file_path);
-    
+
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
+        fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {}", e))?;
     }
 
-    fs::write(path, &args.args_content)
-        .map_err(|e| format!("Failed to write args.txt: {}", e))?;
-
+    fs::write(path, &args.args_content).map_err(|e| format!("Failed to write args.txt: {}", e))?;
 
     let mut command = Command::new(&args.java_path);
     command
@@ -36,8 +35,9 @@ pub async fn launch_minecraft(window: tauri::Window, args: MinecraftLaunchArgs) 
         command.current_dir(working_dir);
     }
 
-
-    let mut child = command.spawn().map_err(|e| format!("Failed to start java: {}", e))?;
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("Failed to start java: {}", e))?;
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
     let window_clone = window.clone();
@@ -54,7 +54,10 @@ pub async fn launch_minecraft(window: tauri::Window, args: MinecraftLaunchArgs) 
         }
     });
 
-    let status = child.wait().await.map_err(|e| format!("Java failed: {}", e))?;
+    let status = child
+        .wait()
+        .await
+        .map_err(|e| format!("Java failed: {}", e))?;
     if !status.success() {
         return Err(format!(
             "Java exited with code: {}",
