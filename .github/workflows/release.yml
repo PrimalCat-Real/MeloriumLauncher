@@ -7,72 +7,48 @@ on:
 
 jobs:
   build:
+    permissions:
+      contents: write  # чтобы пушить release-ассеты
     strategy:
-      fail-fast: false
       matrix:
-        platform: [ubuntu-22.04, windows-latest, macos-latest]
+        platform: [windows-latest]
 
     runs-on: ${{ matrix.platform }}
 
-    permissions:
-      contents: write  # Нужно для создания релиза
-
     steps:
-      - name: 📦 Checkout code
+      - name: 📥 Checkout repo
         uses: actions/checkout@v4
 
-      - name: 🛠 Install dependencies (Linux only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: 🔧 Setup Node.js
+      - name: 🟩 Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
-      - name: 💾 Cache node_modules
-        uses: actions/cache@v4
+      - name: 🔧 Set up Rust
+        uses: actions-rs/toolchain@v1
         with:
-          path: node_modules
-          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          toolchain: stable
+          target: x86_64-pc-windows-msvc
+          override: true
 
-      - name: 🦀 Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: 📦 Install dependencies
+        run: npm ci
 
-      - name: 💾 Cache Rust build
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: './src-tauri -> target'
+      - name: 📐 Build frontend
+        run: npm run build
 
-      - name: 📁 Install dependencies & Build frontend
-        run: |
-          npm ci
-          npm run build
+      - name: 🧰 Install Tauri CLI
+        run: npm run tauri -- dev --version || npm install -g @tauri-apps/cli
 
-      - name: 🛠 Install Tauri CLI
-        run: npm install -g @tauri-apps/cli
+      - name: 🏗️ Build Tauri app
+        run: npm run tauri build
 
-      - name: 🚀 Build Tauri app
-        run: npx tauri build
-
-      - name: 🧠 Get version from tauri.conf.json
-        id: version
-        run: |
-          echo "APP_VERSION=$(jq -r .package.version src-tauri/tauri.conf.json)" >> $GITHUB_ENV
-
-      - name: 📤 Upload to GitHub Releases
+      - name: 🚀 Upload release artifacts
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: "Release v${{ env.APP_VERSION }}"
           files: |
-            src-tauri/target/release/bundle/**/*.dmg
-            src-tauri/target/release/bundle/**/*.msi
-            src-tauri/target/release/bundle/**/*.AppImage
-            src-tauri/target/release/bundle/**/*.deb
-            src-tauri/target/release/bundle/**/*.zip
+            src-tauri/target/release/bundle/**/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
