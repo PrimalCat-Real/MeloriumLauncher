@@ -1,0 +1,19 @@
+{
+    "dbcode.connections": [
+        {
+            "connectionId": "yKaDuY70lacfLG-lTUw-h",
+            "name": "Melorium",
+            "driver": "postgres",
+            "connectionType": "host",
+            "host": "217.28.223.98",
+            "port": 5432,
+            "ssl": false,
+            "username": "melorium",
+            "password": "",
+            "savePassword": "secretStorage",
+            "database": "Melorium",
+            "readOnly": false,
+            "connectionTimeout": 30
+        }
+    ]
+}
