@@ -1,6 +1,6 @@
 import React from 'react'
 
-const LogoBrand = ({width = 36, height = 36}: {width?: number, height?: number}) => {
+const LogoBrand = ({width = 30, height = 30}: {width?: number, height?: number}) => {
   return (
     <svg width={width} height={height} viewBox="0 0 57 63" fill="inherit" xmlns="http://www.w3.org/2000/svg">
         <desc>
