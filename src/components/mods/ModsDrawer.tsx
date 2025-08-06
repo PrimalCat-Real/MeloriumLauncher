@@ -9,12 +9,15 @@ import RamSelector from './RamSelector'
 import MinimizaButton from '../header/MinimizaButton'
 import CloseButton from '../header/CloseButton'
 import Logout from '../login/logout'
+import { cn } from '@/lib/utils'
+import { RootState } from '@/store/configureStore'
+import { useSelector } from 'react-redux'
 
 const ModsDrawer = ({children}: {children: ReactNode}) => {
   const [open, setOpen] = useState(false)
-
+  const authStatus = useSelector((state: RootState) => state.authSlice.authStatus)
   return (
-    <div>
+    <div className={cn( !authStatus && "hidden")}>
       <Button className='h-8 w-8' variant={"outline"} onClick={() => setOpen(true)}>
         <Settings />
       </Button>

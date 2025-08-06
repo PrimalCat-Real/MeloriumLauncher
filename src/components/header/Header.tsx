@@ -1,5 +1,3 @@
-
-
 import React from 'react'
 import ModsDrawer from '../mods/ModsDrawer'
 import ModsTable from '../mods/ModsTable'
@@ -7,6 +5,9 @@ import Logo from './Logo'
 import MinimizaButton from './MinimizaButton'
 import CloseButton from './CloseButton'
 import Logout from '../login/logout'
+import { useSelector } from 'react-redux'
+import { RootState } from '@/store/configureStore'
+import { cn } from '@/lib/utils'
 
 const Header = () => {
   return (
