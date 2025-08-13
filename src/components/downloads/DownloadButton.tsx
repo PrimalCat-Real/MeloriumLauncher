@@ -17,6 +17,7 @@ import { toast } from 'sonner'
 import { cn, handleIgnoreClientSettings, STAGES } from '@/lib/utils'
 import { FILES_TO_SKIP_WORKTREE, repo_path } from '@/lib/config'
 import path from 'path'
+import { WaveDots } from './WaveDots'
 
 
 
@@ -65,9 +66,9 @@ const DownloadButton = () => {
           }
         }
       }
-      if (!found && stage !== "В процессе") {
-        setStage("В процессе")
-        lastStage.current = "В процессе"
+      if (!found && stage !== "Проверка целостности") {
+        setStage("Проверка целостности")
+        lastStage.current = "Проверка целостности"
       }
     }).then(x => { unlisten = x })
 
@@ -145,7 +146,9 @@ const DownloadButton = () => {
             <>
               <Progress className='h-4 w-full' value={progress} max={100} /> 
               <div className='w-full flex justify-between items-center'>
-                <p>{stage || "Запуск"}</p>
+                <p>{stage || "Запуск"}
+                  <WaveDots className='ml-1'></WaveDots>
+                </p>
                 <p>{progress}/100</p>
               </div>
             </>:

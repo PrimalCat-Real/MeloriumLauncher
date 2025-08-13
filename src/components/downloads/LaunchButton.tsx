@@ -69,7 +69,7 @@ const LaunchButton = () => {
         </>
         )}
       {launchStatus.status == "idle" && (<span>Играть</span>)}
-      </Button>
+    </Button>
   )
   
 }

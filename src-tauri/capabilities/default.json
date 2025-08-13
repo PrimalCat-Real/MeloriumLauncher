@@ -10,7 +10,11 @@
     "dialog:default",
     "core:window:allow-start-dragging",
     "core:window:allow-minimize",
-    "core:window:allow-close"
+    "core:window:allow-close",
+    "hwinfo:allow-cpu-info",
+    "hwinfo:allow-gpu-info",
+    "hwinfo:allow-ram-info",
+    "hwinfo:allow-os-info"
     
   ]
 }

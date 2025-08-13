@@ -13,7 +13,8 @@ import path from 'path'
 import { resolveResource } from '@tauri-apps/api/path'
 import { repo_path } from '@/lib/config'
 import { toast } from 'sonner'
-import { handleIgnoreClientSettings } from '@/lib/utils'
+import { getPlayerSystemInfo, handleIgnoreClientSettings } from '@/lib/utils'
+import { WaveDots } from './WaveDots'
 
 const GameButtons = () => {
     const status = useSelector((state: RootState) => state.downloadSlice.status)
@@ -118,6 +119,13 @@ const GameButtons = () => {
         // первый запуск сразу
         runCheck();
 
+        getPlayerSystemInfo().then((info: any) => {
+            console.log("Системная информация:", info);
+        });
+
+
+        
+
         // повторять каждые 30 сек
         interval = setInterval(runCheck, 30000);
 
@@ -126,10 +134,13 @@ const GameButtons = () => {
         };
     }, [baseDir]);
 
+    
 
     listen<string>('minecraft-launch-progress', (event) => {
-    console.log("MC:", event.payload);
+        console.log("MC:", event.payload);
     });
+
+    
     
     
     return (

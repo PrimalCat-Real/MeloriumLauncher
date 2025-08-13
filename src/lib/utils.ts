@@ -74,4 +74,26 @@ export const handleIgnoreClientSettings = async (gameDir: string,  toaster: type
         description: String(e),
       });
     }
-  }
+}
+
+
+import {
+  getCpuInfo,
+  getRamInfo,
+  getGpuInfo,
+  getOsInfo,
+} from "tauri-plugin-hwinfo";
+
+export async function getPlayerSystemInfo() {
+  const cpu = await getCpuInfo();
+  const ram = await getRamInfo();
+  const gpu = await getGpuInfo();
+  const os = await getOsInfo();
+
+  return {
+    cpu,
+    ram,
+    gpu,
+    os
+  };
+}

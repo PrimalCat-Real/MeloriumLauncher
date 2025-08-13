@@ -54,9 +54,9 @@ const [progress, setProgress] = useState(0)
           }
         }
       }
-      if (!found && stage !== "В процессе") {
-        setStage("В процессе")
-        lastStage.current = "В процессе"
+      if (!found && stage !== "Проверка целостности") {
+        setStage("Проверка целостности")
+        lastStage.current = "Проверка целостности"
       }
       // eslint-disable-next-line
     }).then(x => { unlisten = x })
