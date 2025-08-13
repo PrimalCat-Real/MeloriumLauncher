@@ -53,7 +53,7 @@ jobs:
         run: npm run tauri -- dev --version || npm install -g @tauri-apps/cli
 
       - name: 🏗️ Build and publish Tauri app
-        uses: tauri-apps/tauri-action@v2
+        uses: tauri-apps/tauri-action@v0.5.22
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
