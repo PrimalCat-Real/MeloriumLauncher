@@ -97,3 +97,26 @@ export async function getPlayerSystemInfo() {
     os
   };
 }
+
+import { check } from '@tauri-apps/plugin-updater';
+import { relaunch } from '@tauri-apps/plugin-process';
+
+async function checkAndUpdate(toaster: typeof toast) {
+  try {
+    const update = await check();
+    if (update) {
+      toaster.info('Доступно обновление', {
+        description: `Загрузка и установка версии ${update.version}`
+      });
+      // console.log(`Знайдено оновлення ${update.version}`);
+
+      await update.downloadAndInstall();
+
+      await relaunch();
+    }
+  } catch (error) {
+    toaster.error('Error while check updates:', {
+      description: String(error),
+    });
+  }
+}

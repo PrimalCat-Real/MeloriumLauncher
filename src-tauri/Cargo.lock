@@ -3,6 +3,28 @@
 version = 3
 
 [[package]]
+name = "Melorium"
+version = "0.0.5"
+dependencies = [
+ "bcrypt",
+ "dotenvy",
+ "log",
+ "serde",
+ "serde_json",
+ "sysinfo 0.30.13",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-hwinfo",
+ "tauri-plugin-log",
+ "tauri-plugin-process",
+ "tauri-plugin-updater",
+ "tokio",
+ "tokio-postgres",
+ "tokio-stream",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -89,27 +111,6 @@ name = "anyhow"
 version = "1.0.98"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
-
-[[package]]
-name = "app"
-version = "0.1.0"
-dependencies = [
- "bcrypt",
- "dotenvy",
- "log",
- "serde",
- "serde_json",
- "sysinfo 0.30.13",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-hwinfo",
- "tauri-plugin-log",
- "tauri-plugin-updater",
- "tokio",
- "tokio-postgres",
- "tokio-stream",
-]
 
 [[package]]
 name = "arbitrary"
@@ -4377,6 +4378,16 @@ dependencies = [
  "tauri-plugin",
  "thiserror 2.0.12",
  "time",
+]
+
+[[package]]
+name = "tauri-plugin-process"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7461c622a5ea00eb9cd9f7a08dbd3bf79484499fd5c21aa2964677f64ca651ab"
+dependencies = [
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

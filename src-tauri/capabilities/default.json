@@ -14,7 +14,8 @@
     "hwinfo:allow-cpu-info",
     "hwinfo:allow-gpu-info",
     "hwinfo:allow-ram-info",
-    "hwinfo:allow-os-info"
+    "hwinfo:allow-os-info",
+    "process:default"
     
   ]
 }
