@@ -45,18 +45,26 @@ jobs:
 
       - name: 📦 Install dependencies
         run: npm ci
-
+        
       - name: 📐 Build frontend
         run: npm run build
 
       - name: 🧰 Install Tauri CLI
         run: npm run tauri -- dev --version || npm install -g @tauri-apps/cli
 
-      - name: 🏗️ Build Tauri app
-        run: npm run tauri build
+      - name: 🏗️ Build and publish Tauri app
+        uses: tauri-apps/tauri-action@v2
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_PRIVATE_KEY_PASSWORD }}
+        with:
+          tag: ${{ github.ref_name }} 
+      # - name: 🏗️ Build Tauri app
+      #   run: npm run tauri build
+      #   env:
+      #     TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+      #     TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_PRIVATE_KEY_PASSWORD }}
 
       - name: 🚀 Upload release artifacts
         uses: softprops/action-gh-release@v2

@@ -1,10 +1,10 @@
 [package]
-name = "app"
-version = "0.1.0"
+name = "Melorium"
+version = "0.0.5"
 description = "A Tauri App"
-authors = ["you"]
+authors = ["primalcat"]
 license = ""
-repository = ""
+repository = "https://github.com/PrimalCat-Real/MeloriumLauncher"
 edition = "2021"
 rust-version = "1.77.2"
 
