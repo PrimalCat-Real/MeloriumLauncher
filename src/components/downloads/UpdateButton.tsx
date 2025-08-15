@@ -9,6 +9,7 @@ import { Progress } from '../ui/progress'
 import { resolveResource } from '@tauri-apps/api/path'
 import { invoke } from '@tauri-apps/api/core'
 import { changeDownloadStatus } from '@/store/slice/downloadSlice'
+import { WaveDots } from './WaveDots'
 
 const UpdateButton = () => {
 const [progress, setProgress] = useState(0)
@@ -96,7 +97,9 @@ const [progress, setProgress] = useState(0)
             <div className='flex flex-col gap-1 w-full'>
                 <Progress className='h-4 w-full' value={progress} max={100} />
                 <div className='w-full flex justify-between items-center'>
-                <p>{stage || "Запуск"}</p>
+                <p>{stage || "Запуск"}
+                  <WaveDots className='ml-1'></WaveDots>
+                </p>
                 <p>{progress}/100</p>
                 </div>
             </div>
