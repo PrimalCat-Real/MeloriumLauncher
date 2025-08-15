@@ -14,7 +14,7 @@ const RamSelector = () => {
     const [sliderValue, setSliderValue] = useState(javaMemory)
     
     const [inputValue, setInputValue] = useState(javaMemory.toString())
-    const minRam = 1024
+    const minRam = 4096 // 4 GB minimum RAM for Java
     const [userRAM, setUserRAM] = useState(minRam)
     useEffect(() => {
         const initUserRam = async () => {

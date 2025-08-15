@@ -60,7 +60,7 @@ const LoginPage = () => {
     if (username === 'test' && password === 'test') {
       dispatch(
         setUserData({
-          userUuid: 'test-uuid-12345',
+          userUuid: 'e8a18932-c201-493a-b1b0-85853c19fde6',
           authStatus: true,
           userLogin: username,
           userPassword: password,
