@@ -144,6 +144,7 @@ async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> {
         .arg("--hard")
         .stdout(Stdio::null())
         .stderr(Stdio::null());
+        .creation_flags(CREATE_NO_WINDOW); 
     reset_cmd
         .spawn()
         .map_err(|e| format!("Failed to start git reset: {}", e))?
@@ -305,6 +306,7 @@ async fn skip_worktree(args: AssumeUnchangedArgs) -> Result<(), String> {
             .arg("ls-files")
             .arg("--error-unmatch")
             .arg(&full_path)
+            .creation_flags(CREATE_NO_WINDOW)
             .output()
             .await;
 
@@ -341,6 +343,7 @@ async fn skip_worktree(args: AssumeUnchangedArgs) -> Result<(), String> {
                 .arg("update-index")
                 .arg("--skip-worktree")
                 .arg(&full_path)
+                .creation_flags(CREATE_NO_WINDOW)
                 .status()
                 .await;
 
@@ -485,6 +488,7 @@ async fn check_git_update(args: GitCheckUpdateArgs) -> Result<bool, String> {
     let local_output = Command::new(&args.git_path)
         .current_dir(&args.repo_path)
         .args(["rev-parse", "HEAD"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .await
         .map_err(|e| format!("Failed to get local hash: {}", e))?;
@@ -493,6 +497,7 @@ async fn check_git_update(args: GitCheckUpdateArgs) -> Result<bool, String> {
     let remote_output = Command::new(&args.git_path)
         .current_dir(&args.repo_path)
         .args(["rev-parse", "origin/main"])
+        .creation_flags(CREATE_NO_WINDOW)
         .output()
         .await
         .map_err(|e| format!("Failed to get remote hash: {}", e))?;
