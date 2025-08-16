@@ -143,7 +143,7 @@ async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> {
         .arg("reset")
         .arg("--hard")
         .stdout(Stdio::null())
-        .stderr(Stdio::null());
+        .stderr(Stdio::null())
         .creation_flags(CREATE_NO_WINDOW); 
     reset_cmd
         .spawn()
