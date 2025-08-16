@@ -34,9 +34,8 @@ pub async fn launch_minecraft(
         .stderr(Stdio::piped())
         .creation_flags(CREATE_NO_WINDOW);
 
-    if let Some(working_dir) = Path::new(&args.game_dir).parent() {
-        command.current_dir(working_dir);
-    }
+    let working_dir = Path::new(&args.game_dir);
+    command.current_dir(working_dir);
 
     let mut child = command
         .spawn()

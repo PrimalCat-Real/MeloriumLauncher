@@ -22,7 +22,7 @@ export async function useMinecraftLaunch(params: MinecraftLaunchParams) {
         java_path: path.join(baseDir, 'java_versions', 'zulu21.42.19-ca-jre21.0.7-win_x64', 'bin', 'javaw.exe'),
         args_content: argsTxt,
         args_file_path: path.join(baseDir, 'args.txt'),
-        game_dir: path.join(baseDir, 'Melorium', 'logs') 
+        game_dir: path.join(baseDir, 'Melorium') 
       }
     });
     return true;
