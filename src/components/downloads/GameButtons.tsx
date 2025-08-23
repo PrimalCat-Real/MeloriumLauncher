@@ -11,7 +11,7 @@ import LaunchButton from './LaunchButton'
 import { listen } from '@tauri-apps/api/event'
 import path from 'path'
 import { resolveResource } from '@tauri-apps/api/path'
-import { repo_path } from '@/lib/config'
+import { repo_path, SERVER_ENDPOINTS } from '@/lib/config'
 import { toast } from 'sonner'
 import { getPlayerSystemInfo, handleIgnoreClientSettings } from '@/lib/utils'
 import { WaveDots } from './WaveDots'
@@ -19,61 +19,30 @@ import { WaveDots } from './WaveDots'
 const GameButtons = () => {
     const status = useSelector((state: RootState) => state.downloadSlice.status)
     const baseDir = useSelector((state: RootState) => state.downloadSlice.gameDir)
-
-    const gitUrl = 'https://raw.githubusercontent.com/PrimalCat-Real/MeloriumMods/refs/heads/main/melorium.json'
-
-    // const [globalVersion, setGlobalVersion] = useState()
-    const [localVersion, setLocalVersion] = useState()
-
+    const endpoint = useSelector((state: RootState) => state.settingsState.activeEndPoint)
 
     const loadModsData = async () => {
-        try {
-            const localVersionStr = await invoke('get_local_version_json', { path: path.join(baseDir, "melorium.json") }) as string;
-            const localJson = JSON.parse(localVersionStr);
-            dispatch(setModsData({ mods: localJson.mods, presets: localJson.presets }));
-        } catch (error) {
-            console.error("Ошибка загрузки модов:", error);
-            if ((error instanceof Error) && error.message.includes('Указанный путь не существует')) {
-                dispatch(changeDownloadStatus('needFisrtInstall'));
-            }
-        }
-
-        await handleIgnoreClientSettings(baseDir, toast)
+        const modsData = await fetch('http://148.251.176.5:8000/config')
+            .then(response => response.json());
+        console.log("modsData", modsData)
+        dispatch(setModsData({ mods: modsData.mods, presets: modsData.presets }));
        
     };
 
+    useEffect(()=>{
+        const ignoreFiles = async () => {
+            if(status == "downloaded"){
+                await handleIgnoreClientSettings(baseDir, toast)
+            }
+        }
+        ignoreFiles()
+    }, [
+        status
+    ])
+
     const checkVersion = async () => {
-        
+        // TODO hide mods button if  not downloaded
         try {
-            const localVersionStr = await invoke('get_local_version_json', { path: path.join(baseDir, "melorium.json") }) as string;
-            
-            const localJson = JSON.parse(localVersionStr);
-            
-            const localVersion = localJson.version;
-
-            // const mods = localJson.mods.map((mod: Mod) => {
-            //     return mod.file
-            // })
-
-            // await invoke('assume_unchanged_mods', {
-            //     args: {
-            //         base_dir: baseDir,
-            //         files: mods
-            //     }
-            // });
-
-            // dispatch(setModsData({ mods: localJson.mods, presets: localJson.presets }))
-            // TODO make it in config
-            const resp = await fetch(gitUrl);
-            const remoteJson = await resp.json();
-            const remoteVersion = remoteJson.version;
-            
-
-            
-            setLocalVersion(localVersion)
-            
-
-            
             const gitPath = await resolveResource("portable-git/bin/git.exe");
             const args = {
                 git_path: gitPath,
@@ -85,17 +54,11 @@ const GameButtons = () => {
             });
 
             // console.log("Has update:", hasUpdate, localVersion, remoteVersion);
-            if (localVersion !== remoteVersion || hasUpdate) {
+            if (hasUpdate) {
                 dispatch(changeDownloadStatus('needUpdate'));
             } else if(baseDir){
                 dispatch(changeDownloadStatus('downloaded'));
             }
-
-            // if (hasUpdate) {
-            //     dispatch(changeDownloadStatus('needUpdate'));
-            // } else {
-            //     dispatch(changeDownloadStatus('downloaded'));
-            // }
         } catch (error) {
             dispatch(changeDownloadStatus('needFisrtInstall'));
             toast.error("Ошибка проверки версии:", {

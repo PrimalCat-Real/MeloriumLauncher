@@ -97,8 +97,8 @@ const [progress, setProgress] = useState(0)
             <div className='flex flex-col gap-1 w-full'>
                 <Progress className='h-4 w-full' value={progress} max={100} />
                 <div className='w-full flex justify-between items-center'>
-                <p>{stage || "Запуск"}
-                  <WaveDots className='ml-1'></WaveDots>
+                <p className='flex gap-1 items-center'>{stage || "Запуск"}
+                  <WaveDots className=''></WaveDots>
                 </p>
                 <p>{progress}/100</p>
                 </div>

@@ -5,3 +5,9 @@ export const FILES_TO_SKIP_WORKTREE = [
   "Melorium/config/sodium-options.json",
   "Melorium/servers.dat",
 ];
+
+export const SERVER_ENDPOINTS = {
+  main: "http://148.251.176.5:8000",
+  proxy: "http://188.225.24.31:8000"
+}
+

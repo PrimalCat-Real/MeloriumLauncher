@@ -10,7 +10,7 @@ import { Input } from '../ui/input'
 
 const RamSelector = () => {
     const dispatch = useDispatch()
-    const javaMemory = useSelector((state: RootState) => state.settingsSlice.javaMemory)
+    const javaMemory = useSelector((state: RootState) => state.settingsState.javaMemory)
     const [sliderValue, setSliderValue] = useState(javaMemory)
     
     const [inputValue, setInputValue] = useState(javaMemory.toString())
@@ -20,7 +20,7 @@ const RamSelector = () => {
         const initUserRam = async () => {
             const totalMb: number = await invoke("get_total_memory_mb");
             console.log("RAM:", totalMb, "MB");
-            setUserRAM(Math.round(totalMb - totalMb*0.05))
+            setUserRAM(Math.round(totalMb - totalMb*0.10))
 
             const clamped = Math.max(minRam, Math.min(javaMemory, totalMb))
             setSliderValue(clamped)

@@ -12,7 +12,7 @@ import authSlice from './slice/authSlice'
 const rootReducer = combineReducers({
   downloadSlice,
   modsSlice,
-  settingsSlice,
+  settingsState: settingsSlice,
   authSlice
 })
 
@@ -20,7 +20,7 @@ const persistConfig = {
   key: 'root',
   storage,
   
-  whitelist: ['downloadSlice', 'settingsSlice', 'authSlice'] 
+  whitelist: ['downloadSlice', 'settingsState', 'authSlice'], 
 }
 
 const persistedReducer = persistReducer(persistConfig, rootReducer)

@@ -16,9 +16,7 @@ const Header = () => {
         <div className='flex gap-4 items-center'>
           <MinimizaButton className='h-8 w-8'></MinimizaButton>
           <CloseButton className='h-8 w-8'></CloseButton>
-            <ModsDrawer>
-              <ModsTable></ModsTable>
-          </ModsDrawer>
+            <ModsDrawer></ModsDrawer>
           <Logout></Logout>
         </div>
     </header>

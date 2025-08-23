@@ -44,7 +44,21 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
-  
+
+  --animate-shiny-text: shiny-text 4s infinite;
+
+  @keyframes shiny-text {
+  0%, 90%, 100% {
+    background-position: calc(-100% - var(--shiny-width)) 0;
+
+    }
+  30%, 60% {
+    background-position: calc(100% + var(--shiny-width)) 0;
+
+    }
+
+  }
+
 }
 
 :root {
@@ -140,7 +154,7 @@
     background: linear-gradient(220.52deg, rgb(231, 152, 255) -1.57%,rgb(208, 54, 255) 19.463%,rgb(208, 54, 255) 75.143%,rgb(231, 152, 255) 100.745%);
   }
 
-  .outline-btn-bg{
+  .outline-btn-bg {
     background: linear-gradient(180.00deg, rgba(0, 0, 0, 0) 2.165%,rgba(92, 41, 108, 0.84) 100%);
   }
 
@@ -164,6 +178,18 @@
     box-shadow: 0px 4px 100px 0px rgba(0, 0, 0, 0.3);
   }
 
+  .secondary-text-gradient{
+    background-color: linear-gradient(180.00deg, rgba(238, 141, 255, 1),rgba(243, 201, 252, 1) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color:transparent;
+    background-clip:text;
+    color: transparent;
+  }
+
+  .secondary-bg-gradient {
+    background: linear-gradient(180.00deg, rgba(30, 12, 50, 0.5),rgba(95, 43, 115, 1) 100%);
+  }
+
   /* input[type="number"]::-webkit-inner-spin-button,
   input[type="number"]::-webkit-outer-spin-button {
     @apply -webkit-appearance-none;
@@ -176,4 +202,3 @@
   } */
 
 }
-

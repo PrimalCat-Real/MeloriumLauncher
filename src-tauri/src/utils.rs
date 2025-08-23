@@ -4,6 +4,9 @@ use sysinfo::System;
 use tokio::fs;
 use tokio::fs::read_to_string;
 use tokio_stream::StreamExt;
+use reqwest::Client;
+use std::fs::File;
+use std::io::copy;
 
 #[tauri::command]
 pub async fn get_local_version_json(path: String) -> Result<String, String> {
@@ -128,4 +131,48 @@ pub async fn list_mod_jar_files(mods_path: String) -> Result<Vec<String>, String
         }
     }
     Ok(jar_files)
+}
+
+
+#[tauri::command]
+pub async fn download_mod_file(
+    url: String,
+    path: String,
+    mod_name: String,
+    username: String,
+    password: String,
+) -> Result<(), String> {
+    let client = Client::new();
+
+    let resp = client
+        .post(&url)
+        .json(&serde_json::json!({
+            "modName": mod_name,
+            "username": username,
+            "password": password
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Ошибка при запросе: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Сервер вернул ошибку: {}", resp.status()));
+    }
+
+    let mut file_path = PathBuf::from(path);
+    file_path.push(&mod_name);
+
+    let mut file = File::create(&file_path)
+        .map_err(|e| format!("Не удалось создать файл: {}", e))?;
+
+    let mut content = resp
+        .bytes_stream();
+
+    while let Some(chunk) = content.next().await {
+        let data = chunk.map_err(|e| format!("Ошибка чтения данных: {}", e))?;
+        copy(&mut data.as_ref(), &mut file)
+            .map_err(|e| format!("Ошибка записи файла: {}", e))?;
+    }
+
+    Ok(())
 }

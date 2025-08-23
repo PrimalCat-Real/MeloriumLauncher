@@ -146,8 +146,8 @@ const DownloadButton = () => {
             <>
               <Progress className='h-4 w-full' value={progress} max={100} /> 
               <div className='w-full flex justify-between items-center'>
-                <p>{stage || "Запуск"}
-                  <WaveDots className='ml-1'></WaveDots>
+                <p className='flex items-center gap-1'>{stage || "Запуск"}
+                  <WaveDots className=''></WaveDots>
                 </p>
                 <p>{progress}/100</p>
               </div>

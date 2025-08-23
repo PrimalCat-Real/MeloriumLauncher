@@ -23,7 +23,7 @@ const LaunchButton = () => {
     );
     const gameDir = useSelector((state: RootState) => state.downloadSlice.gameDir)
     console.log("Game Directory:", gameDir);
-    const javaMemory = useSelector((state: RootState) => state.settingsSlice.javaMemory)
+    const javaMemory = useSelector((state: RootState) => state.settingsState.javaMemory)
     const gameParams: MinecraftLaunchParams = {
         baseDir: gameDir,
         username: userLogin,

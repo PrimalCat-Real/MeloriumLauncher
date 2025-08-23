@@ -15,6 +15,7 @@ import { useSelector } from 'react-redux'
 import { toast } from "sonner"
 import axios from 'axios';
 import { useMutation } from '@tanstack/react-query'
+import ActiveEndpointSelector from '@/components/shared/ActiveEndpointSelector'
 const LoginPage = () => {
   const router = useRouter()
   const dispatch = useDispatch()
@@ -130,7 +131,14 @@ const LoginPage = () => {
   }
   return (
     <div className="relative min-h-full ">
-        <div className='relative w-[300px] h-[450px] flex items-center justify-center flex-col top-1/2 left-1/2 -translate-x-1/2 translate-y-[15%]'>
+        <form className='relative w-[300px] h-[450px] flex items-center justify-center flex-col top-1/2 left-1/2 -translate-x-1/2 translate-y-[15%]'
+          onKeyPress={(event) => { 
+                if(event.key === 'Enter') {
+                    event.preventDefault();
+                    handleLogin();
+                } 
+          }}
+        >
           <LoginCardBg />
           <div className='z-10 flex flex-col items-center justify-center gap-4 px-6 py-4'>
             <LogoBrand height={90} width={90}></LogoBrand>
@@ -142,7 +150,8 @@ const LoginPage = () => {
               {mutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"  /> : <span>Войти</span> }
             </Button>
           </div>
-      </div>
+      </form>
+      <ActiveEndpointSelector></ActiveEndpointSelector>
     </div>
       
   )

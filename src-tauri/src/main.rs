@@ -12,7 +12,7 @@ use tokio::time::sleep;
 
 mod utils;
 use utils::{
-    get_local_version_json, get_total_memory_mb, is_dir_empty, list_mod_jar_files, toggle_mod_file,
+    get_local_version_json, get_total_memory_mb, is_dir_empty, list_mod_jar_files, toggle_mod_file, download_mod_file
 };
 
 mod rungame;
@@ -223,7 +223,31 @@ struct ResetRepoArgs {
 
 #[tauri::command]
 async fn reset_repo(_window: tauri::Window, args: ResetRepoArgs) -> Result<(), String> {
-    // 1. git reset --hard HEAD
+    // 1. Initialize the directory as a Git repository if it isn't already.
+    let mut init = tokio::process::Command::new(&args.git_path);
+    init
+        .current_dir(&args.repo_path)
+        .args(["init"])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW);
+
+    let init_status = init
+        .spawn()
+        .map_err(|e| format!("spawn init: {e}"))?
+        .wait()
+        .await
+        .map_err(|e| format!("init failed: {e}"))?;
+
+    if !init_status.success() {
+        // You might want to handle this differently, but for now, let's return an error.
+        return Err(format!(
+            "git init exited with code: {}",
+            init_status.code().unwrap_or(-1)
+        ));
+    }
+
+    // 2. git reset --hard HEAD
     let mut reset = tokio::process::Command::new(&args.git_path);
     reset
         .current_dir(&args.repo_path)
@@ -246,7 +270,7 @@ async fn reset_repo(_window: tauri::Window, args: ResetRepoArgs) -> Result<(), S
         ));
     }
 
-    // 2. git clean -fd   (remove untracked files/dirs)
+    // 3. git clean -fd  (remove untracked files/dirs)
     let mut clean = tokio::process::Command::new(&args.git_path);
     clean
         .current_dir(&args.repo_path)
@@ -539,7 +563,8 @@ fn main() {
             toggle_mod_file,
             list_mod_jar_files,
             skip_worktree,
-            check_git_update
+            check_git_update,
+            download_mod_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");
