@@ -1,5 +1,5 @@
 'use client'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '@/store/configureStore'
 import DownloadButton from './DownloadButton'
@@ -19,10 +19,24 @@ import { WaveDots } from './WaveDots'
 const GameButtons = () => {
     const status = useSelector((state: RootState) => state.downloadSlice.status)
     const baseDir = useSelector((state: RootState) => state.downloadSlice.gameDir)
-    const endpoint = useSelector((state: RootState) => state.settingsState.activeEndPoint)
+    const activeEndPoint = useSelector(
+        (s: RootState) => s.settingsState.activeEndPoint
+      )
+    const configUrl = useMemo(() => {
+    // fallback
+    let base = String(activeEndPoint ?? SERVER_ENDPOINTS.main)
+
+    // ensure scheme present
+    if (!/^https?:\/\//i.test(base)) base = `http://${base}`
+
+    // remove trailing slashes
+    base = base.replace(/\/+$/, '')
+
+    return `${base}/config`
+    }, [activeEndPoint])
 
     const loadModsData = async () => {
-        const modsData = await fetch('http://148.251.176.5:8000/config')
+        const modsData = await fetch(configUrl)
             .then(response => response.json());
         console.log("modsData", modsData)
         dispatch(setModsData({ mods: modsData.mods, presets: modsData.presets }));

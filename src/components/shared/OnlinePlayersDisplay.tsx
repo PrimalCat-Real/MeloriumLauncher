@@ -73,11 +73,11 @@ const OnlinePlayersDisplay = (): JSX.Element => {
   }, [endpoint])
 
   if (!endpoint || !resource) {
-    return <Skeleton className="h-6 w-12 rounded-full bg-secondary" />
+    return <Skeleton className="h-8 min-w-32 rounded-full bg-border" />
   }
 
   return (
-    <Suspense fallback={<Skeleton className="h-6 w-12 rounded-xl" />}>
+    <Suspense fallback={<Skeleton className="h-8.5 min-w-32 rounded-full bg-secondary/50" />}>
       <PlayersCount resource={resource} />
     </Suspense>
   )

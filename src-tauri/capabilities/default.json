@@ -15,6 +15,7 @@
     "hwinfo:allow-gpu-info",
     "hwinfo:allow-ram-info",
     "hwinfo:allow-os-info",
+    "updater:default",
     "process:default"
     
   ]
