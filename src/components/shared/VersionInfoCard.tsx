@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { getVersion } from "@tauri-apps/api/app";
 
 import { check, Update } from "@tauri-apps/plugin-updater";
-import { relaunch } from "@tauri-apps/plugin-process";
 
 type Versions = {
   current: string;
@@ -67,7 +66,7 @@ const VersionInfoCard = () => {
     startTransition(async () => {
       try {
         await data.update?.downloadAndInstall();
-        await relaunch();
+        // await relaunch();
       } catch (err) {
         setData((prev) => {
           const prevSafe = prev ?? { current: "unknown", server: "unknown", update: null };
