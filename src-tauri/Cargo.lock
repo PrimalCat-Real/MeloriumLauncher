@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "Melorium"
-version = "0.0.5"
+version = "0.0.13"
 dependencies = [
  "bcrypt",
  "dotenvy",

@@ -1,6 +1,6 @@
 [package]
 name = "Melorium"
-version = "0.0.5"
+version = "0.0.13"
 description = "A Tauri App"
 authors = ["primalcat"]
 license = ""
