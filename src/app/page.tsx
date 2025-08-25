@@ -5,7 +5,7 @@ import GameButtons from "@/components/downloads/GameButtons";
 import LoginRedirect from "@/components/login/login-redirect";
 import ActiveEndpointSelector from "@/components/shared/ActiveEndpointSelector";
 import OnlinePlayersDisplay from "@/components/shared/OnlinePlayersDisplay";
-import VersionInfoCard from "@/components/shared/VersionInfoCard";
+import VersionInfoCard from "@/components/shared/AutoUpdater";
 // import { Progress } from "@/components/ui/progress";
 // import Image from "next/image";
 // import { useRouter } from "next/router";
