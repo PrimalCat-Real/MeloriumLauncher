@@ -75,9 +75,10 @@ const GameButtons = () => {
             }
         } catch (error) {
             dispatch(changeDownloadStatus('needFisrtInstall'));
-            toast.error("Ошибка проверки версии:", {
-                description: String(error),
-            });
+            console.log("Ошибка проверки версии:", String(error))
+            // toast.error("Ошибка проверки версии:", {
+            //     description: String(error),
+            // });
         }
     }
     const dispatch = useDispatch();

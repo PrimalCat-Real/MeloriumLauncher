@@ -78,8 +78,11 @@ async fn clone_repo(window: tauri::Window, args: GitCloneArgs) -> Result<(), Str
         .arg("clone")
         .arg("--progress")
         .arg("--verbose")
+        .arg("--depth=1")
+        .arg("--single-branch")
+        .arg("-b").arg("main")
         .arg(&args.repository_url)
-        .arg(&args.destination_path)
+        .arg(&args.destination_path);
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .creation_flags(CREATE_NO_WINDOW);

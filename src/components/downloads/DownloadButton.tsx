@@ -15,9 +15,9 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { FolderSearch } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn, handleIgnoreClientSettings, STAGES } from '@/lib/utils'
-import { FILES_TO_SKIP_WORKTREE, repo_path } from '@/lib/config'
 import path from 'path'
 import { WaveDots } from './WaveDots'
+import { REPO_MIRROR_URL, REPO_ORIGIN_URL, SERVER_ENDPOINTS } from '@/lib/config'
 
 
 
@@ -31,6 +31,13 @@ const DownloadButton = () => {
   const lastStage = useRef<string>("")
   const dispatch = useDispatch()
   const gameDir = useSelector((state: RootState) => state.downloadSlice.gameDir)
+
+  const { activeEndPoint } = useSelector((s: RootState) => s.settingsState);
+
+  const cloneUrl = React.useMemo(() => {
+    const isMain = activeEndPoint === SERVER_ENDPOINTS.main;
+    return isMain ? REPO_MIRROR_URL : REPO_ORIGIN_URL;
+  }, [activeEndPoint]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined
@@ -88,7 +95,7 @@ const DownloadButton = () => {
       await invoke('clone_repo', {
         args: {
           git_path: gitPath,
-          repository_url: repo_path,
+          repository_url: cloneUrl,
           destination_path: gameDir
         }
       })
