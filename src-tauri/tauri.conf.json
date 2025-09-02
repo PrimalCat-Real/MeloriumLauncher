@@ -1,0 +1,52 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Melorium",
+  "version": "0.1.5",
+  "identifier": "primalcat.melorium",
+  "build": {
+    "frontendDist": "../out",
+    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Melorium",
+        "width": 1000,
+        "height": 640,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "devtools": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "createUpdaterArtifacts": true,
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": ["portable-git"]
+  },
+  "plugins": {
+    "updater": {
+      "windows": {
+        "installMode": "passive"
+      },
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI5QkQzMDRBNzVDOUUxQjAKUldTdzRjbDFTakM5dVZGK0dtaUh1YnFPTTdZWUNUZ3VKb0ZUV0lvUEpzNUZmZmZzdGkyOHJYajMK",
+      "endpoints": [
+        "https://github.com/PrimalCat-Real/MeloriumLauncher/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}
