@@ -9,7 +9,7 @@ import { RootState } from '@/store/configureStore'
 import { setCredentials, setUserData } from '@/store/slice/authSlice'
 import { LoaderCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useDispatch } from 'react-redux'
 import { useSelector } from 'react-redux'
 import { toast } from "sonner"
@@ -69,7 +69,10 @@ const LoginPage = () => {
         })
       );
       toast.success('Вход выполнен успешно!', { description: 'Вы вошли как тестовый пользователь.' });
+      // alert("login")
+      // router.push('/')
       router.replace('/');
+      
       return;
     }
 
@@ -87,7 +90,9 @@ const LoginPage = () => {
               donateTokens: data.tokens
             })
           );
-          router.replace('/');
+          alert("login")
+          
+          // router.replace('/');
         },
         onError: (err: any) => {
           toast.error('Ошибка входа', { description: err?.response?.data?.error });
@@ -129,29 +134,56 @@ const LoginPage = () => {
   const handlePasswordInput = (event: React.ChangeEvent<HTMLInputElement>) => {
     setPassword(event.target.value)
   }
+
+  const handleFormSubmit = useCallback(
+    (event: React.FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      handleLogin();
+    },
+    [handleLogin]
+  );
   return (
     <div className="relative min-h-full ">
-        <form className='relative w-[300px] h-[450px] flex items-center justify-center flex-col top-1/2 left-1/2 -translate-x-1/2 translate-y-[15%]'
-          onKeyPress={(event) => { 
-                if(event.key === 'Enter') {
-                    event.preventDefault();
-                    handleLogin();
-                } 
-          }}
+        <form
+          className="relative w-[300px] h-[450px] flex items-center justify-center flex-col top-1/2 left-1/2 -translate-x-1/2 translate-y-[15%]"
+          onSubmit={handleFormSubmit}
         >
           <LoginCardBg />
-          <div className='z-10 flex flex-col items-center justify-center gap-4 px-6 py-4'>
-            <LogoBrand height={90} width={90}></LogoBrand>
-            <LogoText></LogoText>
-            <p className='text-center leading-5 mb-4 outline-btn-text-gradient '>Пожалуйста, введите ваш логин и пароль, чтобы продолжить</p>
-            <Input value={username} onChange={handleUsernameInput} className='w-full rounded-2xl text-center' placeholder='Логин' type='text'></Input>
-            <Input value={password} onChange={handlePasswordInput} className='w-full rounded-2xl text-center' placeholder='Пароль' type='password'></Input>
-            <Button onKeyPress={(event) => {}} disabled={mutation.isPending} onClick={handleLogin} className='w-full rounded-2xl'>
-              {mutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin"  /> : <span>Войти</span> }
+          <div className="z-10 flex flex-col items-center justify-center gap-4 px-6 py-4">
+            <LogoBrand height={90} width={90} />
+            <LogoText />
+            <p className="text-center leading-5 mb-4 outline-btn-text-gradient">
+              Пожалуйста, введите ваш логин и пароль, чтобы продолжить
+            </p>
+            <Input
+              value={username}
+              onChange={handleUsernameInput}
+              className="w-full rounded-2xl text-center"
+              placeholder="Логин"
+              type="text"
+            />
+            <Input
+              value={password}
+              onChange={handlePasswordInput}
+              className="w-full rounded-2xl text-center"
+              placeholder="Пароль"
+              type="password"
+            />
+            <Button
+              type="submit"
+              disabled={mutation.isPending}
+              className="w-full rounded-2xl"
+            >
+              {mutation.isPending ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                <span>Войти</span>
+              )}
             </Button>
           </div>
-      </form>
-      <ActiveEndpointSelector></ActiveEndpointSelector>
+          <ActiveEndpointSelector />
+        </form>
+
     </div>
       
   )

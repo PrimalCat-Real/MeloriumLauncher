@@ -15,6 +15,7 @@ const Logout = () => {
     const dispatch = useDispatch()
     const hadleLogout = () => {
         dispatch(clearAuthData())
+        alert("logout")
         router.push('/login') 
     }
   return (
