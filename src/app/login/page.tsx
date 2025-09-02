@@ -90,9 +90,9 @@ const LoginPage = () => {
               donateTokens: data.tokens
             })
           );
-          alert("login")
+          // alert("login")
           
-          // router.replace('/');
+          router.replace('/');
         },
         onError: (err: any) => {
           toast.error('Ошибка входа', { description: err?.response?.data?.error });
