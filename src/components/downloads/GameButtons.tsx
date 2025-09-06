@@ -15,6 +15,7 @@ import { SERVER_ENDPOINTS } from '@/lib/config'
 import { toast } from 'sonner'
 import { getPlayerSystemInfo, handleIgnoreClientSettings } from '@/lib/utils'
 import { WaveDots } from './WaveDots'
+import { stat } from 'fs'
 
 const GameButtons = () => {
     const status = useSelector((state: RootState) => state.downloadSlice.status)
@@ -67,15 +68,18 @@ const GameButtons = () => {
                 args
             });
 
-            // console.log("Has update:", hasUpdate, localVersion, remoteVersion);
+    
+            console.log("Has update:", hasUpdate);
             if (hasUpdate) {
                 dispatch(changeDownloadStatus('needUpdate'));
+                // dispatch(changeDownloadStatus('downloaded'));
             } else if(baseDir){
                 dispatch(changeDownloadStatus('downloaded'));
             }
         } catch (error) {
             dispatch(changeDownloadStatus('needFisrtInstall'));
             console.log("Ошибка проверки версии:", String(error))
+            // dispatch(changeDownloadStatus('downloaded'));
             // toast.error("Ошибка проверки версии:", {
             //     description: String(error),
             // });

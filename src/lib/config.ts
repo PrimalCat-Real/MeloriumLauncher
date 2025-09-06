@@ -13,3 +13,5 @@ export const SERVER_ENDPOINTS = {
   proxy: "http://188.225.24.31:8000"
 }
 
+export const GDRIVE_FILE_ID = "1qAdNSIIw15I2QVOgJmaQCMwrFG9GucrM"
+export const GDRIVE_API_KEY = "AIzaSyDmiWk-x_VXqCfkvQv8fWD39yf3bjVFQys"

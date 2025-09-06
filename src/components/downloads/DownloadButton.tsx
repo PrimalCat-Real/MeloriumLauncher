@@ -1,179 +1,144 @@
-'use client'
+'use client';
 
-import React, { useState, useEffect, useRef } from 'react'
-import { Progress } from '../ui/progress'
-import { Button } from '../ui/button'
-import { invoke } from "@tauri-apps/api/core"
-import { listen } from "@tauri-apps/api/event"
-import { resolveResource } from "@tauri-apps/api/path"
-import { useDispatch, useSelector } from 'react-redux'
-import { changeDownloadStatus, setGameDir } from '@/store/slice/downloadSlice'
-import { Dialog, DialogTrigger, DialogContent, DialogTitle } from '../ui/dialog'
-import { Input } from '../ui/input'
-import { RootState } from '@/store/configureStore'
-import { open } from '@tauri-apps/plugin-dialog';
-import { FolderSearch } from 'lucide-react'
-import { toast } from 'sonner'
-import { cn, handleIgnoreClientSettings, STAGES } from '@/lib/utils'
-import path from 'path'
-import { WaveDots } from './WaveDots'
-import { REPO_MIRROR_URL, REPO_ORIGIN_URL, SERVER_ENDPOINTS } from '@/lib/config'
+import React, { lazy, memo, Suspense, useCallback, useMemo, useState } from "react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { invoke } from "@tauri-apps/api/core";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState } from "@/store/configureStore";
+import { setGameDir, changeDownloadStatus } from "@/store/slice/downloadSlice";
+import { useTaskProgress } from "@/hooks/useTaskProgress";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { toast } from "sonner";
+import { GDRIVE_API_KEY, GDRIVE_FILE_ID } from "@/lib/config";
 
+const ProgressPanel = lazy(() => import("../shared/ProgressPanel"));
 
+const DownloadButton: React.FC = () => {
+  const dispatch = useDispatch();
+  const gameDir = useSelector((state: RootState) => state.downloadSlice.gameDir);
 
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [started, setStarted] = useState(false);
+  const [taskId, setTaskId] = useState<string>("");
+  const { state, ui } = useTaskProgress(taskId);
 
-const DownloadButton = () => {
-  const [progress, setProgress] = useState(0)
-  const [output, setOutput] = useState<string>('')
-  const [downloading, setDownloading] = useState(false)
-  const [stage, setStage] = useState<string>("")
-  const outputRef = useRef<string[]>([])
-  const lastStage = useRef<string>("")
-  const dispatch = useDispatch()
-  const gameDir = useSelector((state: RootState) => state.downloadSlice.gameDir)
-
-  const { activeEndPoint } = useSelector((s: RootState) => s.settingsState);
-
-  const cloneUrl = React.useMemo(() => {
-    const isMain = activeEndPoint === SERVER_ENDPOINTS.main;
-    return isMain ? REPO_MIRROR_URL : REPO_ORIGIN_URL;
-  }, [activeEndPoint]);
-
-  useEffect(() => {
-    let unlisten: (() => void) | undefined
-    listen<string>('git-progress', (event) => {
-      const text = event.payload || ''
-      outputRef.current.push(text)
-      setOutput(outputRef.current.join('\n'))
-
-      let found = false
-      for (const s of STAGES) {
-        const m = text.match(s.rx)
-        if (m) {
-          if (lastStage.current !== s.key) {
-            setProgress(0)        
-            setStage(s.key)
-            lastStage.current = s.key
-          }
-          setProgress(Number(m[1]))
-          found = true
-          break
-        }
-      }
-      if (!found) {
-        for (const s of STAGES) {
-          if (text.includes(s.key)) {
-            if (lastStage.current !== s.key) {
-              setProgress(0)
-              setStage(s.key)
-              lastStage.current = s.key
-            }
-            found = true
-            break
-          }
-        }
-      }
-      if (!found && stage !== "Проверка целостности") {
-        setStage("Проверка целостности")
-        lastStage.current = "Проверка целостности"
-      }
-    }).then(x => { unlisten = x })
-
-    return () => { if (unlisten) unlisten() }
-    // eslint-disable-next-line
-  }, [])
-
-  const handleDownload = async () => {
-    setDownloading(true)
-    outputRef.current = []
-    setOutput('')
-    setProgress(0)
-    setStage("")
-    lastStage.current = ""
-    try {
-      const gitPath = await resolveResource("portable-git/bin/git.exe")
-      await invoke('clone_repo', {
-        args: {
-          git_path: gitPath,
-          repository_url: cloneUrl,
-          destination_path: gameDir
-        }
-      })
-      await handleIgnoreClientSettings(gameDir, toast)
-      setDownloading(false)
-      dispatch(changeDownloadStatus("downloaded"))
-    } catch (e) {
-      outputRef.current.push(`Error: ${e?.toString()}`)
-      setOutput(outputRef.current.join('\n'))
-      setDownloading(false)
-      setStage("Error")
-    }
-    
-  }
-
+  const handleOpenDialog = useCallback(() => setDialogOpen(true), []);
   
 
-  const handleChooseDir = async () => {
-    const selected = await open({
-      directory: true,
-      multiple: false,
-      title: "Выберите папку для установки игры",
-    });
+  const handlePickPath = useCallback(async () => {
+    const selected = await openDialog({ directory: true, multiple: false, title: "Выберите папку для установки игры" });
     if (selected && typeof selected === "string") {
       let pathToUse = selected;
-      
-      const isEmpty = await invoke<boolean>('is_dir_empty', { path: selected });
+      const isEmpty = await invoke<boolean>("is_dir_empty", { path: selected }).catch(() => false);
       if (!isEmpty) {
-        pathToUse = selected.endsWith('melorium') ? selected : `${selected}/melorium`;
-        const meloriumExists = await invoke<boolean>('is_dir_empty', { path: pathToUse }).catch(() => null);
+        pathToUse = selected.endsWith("melorium") ? selected : `${selected}/melorium`;
+        const meloriumExists = await invoke<boolean>("is_dir_empty", { path: pathToUse }).catch(() => null);
         if (meloriumExists === false) {
-          toast.error("Ошибка", {
-            description: "Папка melorium внутри выбранной директории уже существует и не пуста.",
-          });
+          toast.error("Ошибка", { description: "Папка melorium внутри выбранной директории уже существует и не пуста." });
           return;
         }
       }
-      if(pathToUse) dispatch(setGameDir(pathToUse))
-      
+      dispatch(setGameDir(pathToUse));
     }
-    
-  }
-  
+  }, [dispatch]);
+
+  const handleStart = useCallback(async () => {
+    if (!gameDir) {
+      toast.error("Ошибка", { description: "Сначала выберите путь установки." });
+      return;
+    }
+    const id = crypto.randomUUID();
+    setTaskId(id);
+    setStarted(true);
+
+    const zipPath = `${gameDir}/package.zip`;
+    const extractTo = gameDir;
+
+    try {
+      await invoke("download_and_unzip_drive", {
+        fileId: GDRIVE_FILE_ID,
+        apiKey: GDRIVE_API_KEY,
+        tempZipPath: zipPath,
+        extractTo,
+        displayName: "Игра",
+        removeZip: true,
+        taskId: id,
+      });
+      dispatch(changeDownloadStatus("downloaded"));
+    } catch (e) {
+      toast.error("Ошибка загрузки", { description: String(e) });
+    }
+  }, [dispatch, gameDir]);
+
+  const canClose = useMemo(() => state.stage === "Готово" || !!state.error, [state.error, state.stage]);
+  const handleDialogOpenChange = useCallback((open: boolean) => {
+    if (!open && started && !canClose) return;
+    setDialogOpen(open);
+  }, [started, canClose]);
+  const title = useMemo(() => {
+    if (!started) return "Установка";
+    if (state.error) return "Ошибка";
+    if (state.stage === "Готово") return "Готово";
+    return "Загрузка и распаковка";
+  }, [started, state.error, state.stage]);
+
+  const renderPanel = useCallback(() => {
+    if (!started) {
+      return (
+        <ProgressPanel
+          mode="setup"
+          title={title}
+          setup={{
+            selectedPath: gameDir,
+            onPickPath: handlePickPath,
+            onStart: handleStart,
+            canStart: Boolean(gameDir),
+            startLabel: "Скачать",
+          }}
+        />
+      );
+    }
+    return (
+      <ProgressPanel
+        mode="progress"
+        title={title}
+        stage={state.stage}
+        percent={state.percent}
+        downloaded={ui.downloaded}
+        total={ui.total}
+        speed={ui.speed}
+        eta={ui.eta}
+        canClose={canClose}
+        onClose={() => handleDialogOpenChange(false)}
+      />
+    );
+  }, [canClose, gameDir, handleDialogOpenChange, handlePickPath, handleStart, started, state.percent, state.stage, title, ui.downloaded, ui.eta, ui.speed, ui.total]);
 
   return (
-    <div className='flex h-40 flex-col'>
-      <Dialog>
-        <DialogTrigger asChild>
-          <Button size={"main"}>Скачать</Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-[425px] flex flex-col gap-4 rounded-2xl">
-          <DialogTitle className='text-md'>{downloading ? "Загрузка" :"Выберите путь установки"}</DialogTitle>
-          {
-            downloading ? 
-            <>
-              <Progress className='h-4 w-full' value={progress} max={100} /> 
-              <div className='w-full flex justify-between items-center'>
-                <p className='flex items-center gap-1'>{stage || "Запуск"}
-                  <WaveDots className=''></WaveDots>
-                </p>
-                <p>{progress}/100</p>
+    <div className="flex flex-col gap-3">
+      <Button size="main" onClick={handleOpenDialog}>
+        Скачать
+      </Button>
+
+      <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
+        <DialogContent className="sm:max-w-[450px] rounded-2xl">
+          <Suspense
+            fallback={
+              <div className="space-y-3">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-3/4" />
               </div>
-            </>:
-            <>
-              <Button variant={'outline'} className='w-full text-start justify-between px-8 flex ' onClick={handleChooseDir}>
-                <span className={cn('text-ellipsis whitespace-nowrap text-righ min-w-0 [direction:rtl] text-left overflow-hidden', !gameDir.replace("/", "\\") && "[direction:ltr]")}>{gameDir ? gameDir.replace("/", "\\") : "Выбрать путь..." } </span>
-                <FolderSearch /></Button>
-              <Button className='w-full' size={"main"} onClick={handleDownload} disabled={downloading || !gameDir}>
-                Скачать
-                
-              </Button>
-            </>
-          }
-          
+            }
+          >
+            {renderPanel()}
+          </Suspense>
         </DialogContent>
       </Dialog>
     </div>
-  )
-}
+  );
+};
 
-export default DownloadButton
+export default memo(DownloadButton);

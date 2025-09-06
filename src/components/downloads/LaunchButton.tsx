@@ -35,14 +35,14 @@ const LaunchButton = () => {
         try {
           
           setLaunchStatus({status: "verify"})
-          const gitPath = await resolveResource("portable-git/bin/git.exe");
+          // const gitPath = await resolveResource("portable-git/bin/git.exe");
 
-          await invoke("reset_repo", {
-            args: {
-              git_path: gitPath,
-              repo_path: gameDir,
-            },
-          });
+          // await invoke("reset_repo", {
+          //   args: {
+          //     git_path: gitPath,
+          //     repo_path: gameDir,
+          //   },
+          // });
 
           setLaunchStatus({status: "launching"})
           // setLaunching(true)

@@ -9,7 +9,8 @@ use tauri::async_runtime::spawn;
 use tauri::{window, AppHandle, Emitter, Manager, State, Window};
 use tokio::process::Command;
 use tokio::time::sleep;
-
+mod download;
+use download::{download_from_drive_api, unzip_with_progress, download_and_unzip_drive};
 mod utils;
 use utils::{
     get_local_version_json, get_total_memory_mb, is_dir_empty, list_mod_jar_files, toggle_mod_file, download_mod_file
@@ -564,7 +565,10 @@ fn main() {
             list_mod_jar_files,
             skip_worktree,
             check_git_update,
-            download_mod_file
+            download_mod_file,
+            download_from_drive_api,
+            unzip_with_progress,
+            download_and_unzip_drive
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");

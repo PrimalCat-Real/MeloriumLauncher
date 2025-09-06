@@ -33,6 +33,7 @@ sysinfo = "0.30.5"
 tauri-plugin-hwinfo = "0.2.3"
 tauri-plugin-process = "2"
 reqwest = "0.12.23"
+zip = "4.6.1"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"
