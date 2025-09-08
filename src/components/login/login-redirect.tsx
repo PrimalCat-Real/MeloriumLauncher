@@ -11,7 +11,7 @@ const LoginRedirect = () => {
   useEffect(() => {
       console.log("Auth status:", authStatus)
       if(!authStatus){
-          alert("Test")
+          // alert("Test")
           router.push('/login')
           return;
       }

@@ -44,16 +44,16 @@ const GameButtons = () => {
        
     };
 
-    useEffect(()=>{
-        const ignoreFiles = async () => {
-            if(status == "downloaded"){
-                await handleIgnoreClientSettings(baseDir, toast)
-            }
-        }
-        ignoreFiles()
-    }, [
-        status
-    ])
+    // useEffect(()=>{
+    //     const ignoreFiles = async () => {
+    //         if(status == "downloaded"){
+    //             await handleIgnoreClientSettings(baseDir, toast)
+    //         }
+    //     }
+    //     ignoreFiles()
+    // }, [
+    //     status
+    // ])
 
     const checkVersion = async () => {
         // TODO hide mods button if  not downloaded

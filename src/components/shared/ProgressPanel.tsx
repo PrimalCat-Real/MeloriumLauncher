@@ -123,11 +123,11 @@ const ProgressPanel: React.FC<Props> = (props) => {
               <div />
             </div>
           )}
-          {props.canClose && (
+          {/* {props.canClose && (
             <div className="flex justify-end">
               <Button onClick={handleClose}>Закрыть</Button>
             </div>
-          )}
+          )} */}
         </div>
       )}
     </div>

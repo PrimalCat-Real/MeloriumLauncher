@@ -22,6 +22,9 @@ use rungame::launch_minecraft;
 mod auth;
 use auth::authenticate;
 
+mod reset;
+use reset::reset_repo_selective;
+
 #[derive(Deserialize)]
 struct GitCloneArgs {
     git_path: String,
@@ -568,7 +571,8 @@ fn main() {
             download_mod_file,
             download_from_drive_api,
             unzip_with_progress,
-            download_and_unzip_drive
+            download_and_unzip_drive,
+            reset_repo_selective 
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");

@@ -25,6 +25,8 @@ const LoginPage = () => {
   const [isInitialized, setIsInitialized] = useState(false)
   const [loading, setLoading] = useState(false)
 
+  const activeEndPoint = useSelector((state: RootState) => state.settingsState.activeEndPoint)
+
   useEffect(() => {
     if (!isInitialized && userLogin) {
       setUsername(userLogin)
@@ -44,37 +46,39 @@ const LoginPage = () => {
     tokens: number;
   };
 
- const loginRequest = async ({ login, password }: LoginInput): Promise<LoginRessult> => {
-    // TODO MAKE IT IN CONFIG
-    const { data } = await axios.post(
-      'http://localhost:8000/login',
-      { login, password }
-    );
-    return data;
-  };
+ const loginRequest = useCallback(
+    async ({ login, password }: LoginInput): Promise<LoginRessult> => {
+      const { data } = await axios.post(
+        `${activeEndPoint}/login`,
+        { login, password }
+      )
+      return data
+    },
+    [activeEndPoint]
+  )
 
   const mutation = useMutation({ mutationFn: loginRequest, retry: false });
 
    const handleLogin = async () => {
     // setLoading(true)
 
-    if (username === 'test' && password === 'test') {
-      dispatch(
-        setUserData({
-          userUuid: 'e8a18932-c201-493a-b1b0-85853c19fde6',
-          authStatus: true,
-          userLogin: username,
-          userPassword: password,
-          donateTokens: 99999
-        })
-      );
-      toast.success('Вход выполнен успешно!', { description: 'Вы вошли как тестовый пользователь.' });
-      // alert("login")
-      // router.push('/')
-      router.replace('/');
+    // if (username === 'test' && password === 'test') {
+    //   dispatch(
+    //     setUserData({
+    //       userUuid: 'e8a18932-c201-493a-b1b0-85853c19fde6',
+    //       authStatus: true,
+    //       userLogin: username,
+    //       userPassword: password,
+    //       donateTokens: 99999
+    //     })
+    //   );
+    //   toast.success('Вход выполнен успешно!', { description: 'Вы вошли как тестовый пользователь.' });
+    //   // alert("login")
+    //   // router.push('/')
+    //   router.replace('/');
       
-      return;
-    }
+    //   return;
+    // }
 
     mutation.mutate(
       { login: username, password },
@@ -90,7 +94,6 @@ const LoginPage = () => {
               donateTokens: data.tokens
             })
           );
-          // alert("login")
           
           router.replace('/');
         },

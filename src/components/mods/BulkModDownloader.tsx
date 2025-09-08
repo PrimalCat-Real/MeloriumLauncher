@@ -105,12 +105,12 @@ const downloadUrl = useMemo(() => {
             password: userPassword,
           })
 
-          await invoke('skip_worktree', {
-            args: {
-              base_dir: modsPath,
-              files: [mod.file],
-            },
-          })
+          // await invoke('skip_worktree', {
+          //   args: {
+          //     base_dir: modsPath,
+          //     files: [mod.file],
+          //   },
+          // })
 
           dispatch(removeFromMissingMods(mod))
           dispatch(setModEnabled({ id: mod.id, enabled: true }))

@@ -76,12 +76,12 @@ const ModDownloader = ({ mod, modsPath }: ModDownloaderProps) => {
               password: userPassword,
             })
 
-            await invoke('skip_worktree', {
-              args: {
-                base_dir: modsPath,
-                files: [m.file],
-              },
-            })
+            // await invoke('skip_worktree', {
+            //   args: {
+            //     base_dir: modsPath,
+            //     files: [m.file],
+            //   },
+            // })
 
             console.log(`Мод ${m.file} был успешно загружен`)
             dispatch(removeFromMissingMods(m))

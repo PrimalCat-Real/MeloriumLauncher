@@ -76,9 +76,9 @@ const ModsTable: React.FC = () => {
 
       if (!newEnabled) {
         const filesToAssume = filesToTouch.map((file) => file.filePath)
-        await invoke('skip_worktree', {
-          args: { base_dir: path.join(gameDir || '', 'Melorium', 'mods'), files: filesToAssume },
-        }).catch(() => undefined)
+        // await invoke('skip_worktree', {
+        //   args: { base_dir: path.join(gameDir || '', 'Melorium', 'mods'), files: filesToAssume },
+        // }).catch(() => undefined)
       }
 
       const promises = filesToTouch.map(({ id, filePath, targetState }) =>
