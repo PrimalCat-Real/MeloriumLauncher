@@ -1,11 +1,18 @@
-// components/update/UpdateButton.tsx
 'use client';
 
-import React, { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  lazy,
+  memo,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Progress } from "@/components/ui/progress";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/configureStore";
 import { changeDownloadStatus } from "@/store/slice/downloadSlice";
@@ -14,8 +21,11 @@ import { resolveResource } from "@tauri-apps/api/path";
 import { invoke } from "@tauri-apps/api/core";
 import { STAGES } from "@/lib/utils";
 import { WaveDots } from "./WaveDots";
+import { Progress } from "../ui/progress";
 
 const ProgressPanel = lazy(() => import("@/components/shared/ProgressPanel"));
+
+const MAX_LOG_LINES = 1000;
 
 const UpdateButton: React.FC = () => {
   const dispatch = useDispatch();
@@ -28,70 +38,104 @@ const UpdateButton: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const outputRef = useRef<string[]>([]);
+  const [logVersion, setLogVersion] = useState(0);
+  const logEndRef = useRef<HTMLDivElement | null>(null);
   const lastStage = useRef<string>("");
 
-  const canClose = useMemo(() => started && (stage === "Готово" || Boolean(error)), [error, stage, started]);
+  const canClose = useMemo(
+    () => started && (stage === "Готово" || Boolean(error)),
+    [error, stage, started]
+  );
 
   const handleOpenDialog = useCallback(() => {
     setDialogOpen(true);
   }, []);
 
-  const handleDialogOpenChange = useCallback((open: boolean) => {
-    if (!open && started && !canClose) return;
-    setDialogOpen(open);
-  }, [canClose, started]);
+  const handleDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open && started && !canClose) return;
+      setDialogOpen(open);
+    },
+    [canClose, started]
+  );
 
-  const parseProgressText = useCallback((text: string) => {
-    let matched = false;
-
-    for (const stageDef of STAGES) {
-      const match = text.match(stageDef.rx);
-      if (match) {
-        if (lastStage.current !== stageDef.key) {
-          setPercent(0);
-          setStage(stageDef.key);
-          lastStage.current = stageDef.key;
-        }
-        setPercent(Number(match[1]));
-        matched = true;
-        break;
-      }
+  const bumpLogs = useCallback(() => {
+    if (outputRef.current.length > MAX_LOG_LINES) {
+      const start = outputRef.current.length - Math.floor(MAX_LOG_LINES * 0.9);
+      outputRef.current = outputRef.current.slice(start);
     }
+    setLogVersion((v) => v + 1);
+  }, []);
 
-    if (!matched) {
+  const parseProgressText = useCallback(
+    (text: string) => {
+      let matched = false;
+
       for (const stageDef of STAGES) {
-        if (text.includes(stageDef.key)) {
+        const match = text.match(stageDef.rx);
+        if (match) {
           if (lastStage.current !== stageDef.key) {
             setPercent(0);
             setStage(stageDef.key);
             lastStage.current = stageDef.key;
           }
+          setPercent(Number(match[1]));
           matched = true;
           break;
         }
       }
-    }
 
-    if (!matched && stage !== "Проверка целостности") {
-      setStage("Проверка целостности");
-      lastStage.current = "Проверка целостности";
+      if (!matched) {
+        for (const stageDef of STAGES) {
+          if (text.includes(stageDef.key)) {
+            if (lastStage.current !== stageDef.key) {
+              setPercent(0);
+              setStage(stageDef.key);
+              lastStage.current = stageDef.key;
+            }
+            matched = true;
+            break;
+          }
+        }
+      }
+
+      if (!matched && stage !== "Проверка целостности") {
+        setStage("Проверка целостности");
+        lastStage.current = "Проверка целостности";
+      }
+    },
+    [stage]
+  );
+
+  useEffect(() => {
+    if (logEndRef.current) {
+      logEndRef.current.scrollIntoView({ behavior: "auto", block: "end" });
     }
-  }, [stage]);
+  }, [logVersion]);
 
   useEffect(() => {
     if (!started) return undefined;
-
     let unlisten: (() => void) | undefined;
+
     listen<string>("git-progress", (event) => {
-      const text = event.payload || "";
+      const text = event.payload ?? "";
+      if (!text) return;
       outputRef.current.push(text);
+      bumpLogs();
       parseProgressText(text);
-    }).then((dispose) => { unlisten = dispose; });
+    }).then((dispose) => {
+      unlisten = dispose;
+    });
 
     return () => {
       if (unlisten) unlisten();
     };
-  }, [parseProgressText, started]);
+  }, [bumpLogs, parseProgressText, started]);
+
+  const clearLogs = useCallback(() => {
+    outputRef.current = [];
+    setLogVersion((v) => v + 1);
+  }, []);
 
   const handleStartUpdate = useCallback(async () => {
     if (!gameDir) {
@@ -105,15 +149,31 @@ const UpdateButton: React.FC = () => {
     setStage("");
     outputRef.current = [];
     lastStage.current = "";
+    setLogVersion((v) => v + 1);
 
     try {
       const gitPath = await resolveResource("portable-git/bin/git.exe");
+
+      // reset с фильтрами игнорирования модов .jar и .jar.disabled
+      await invoke("reset_with_ignore", {
+        args: {
+          git_path: gitPath,
+          repo_path: gameDir,
+          ignore_patterns: [
+            "Melorium/mods/*.jar",
+            "Melorium/mods/*.jar.disabled",
+          ],
+        },
+      });
+
+      // вызов pull с rebase
       await invoke("pull_repo", {
         args: {
           git_path: gitPath,
           repo_path: gameDir,
         },
       });
+
       setStage("Готово");
       setPercent(100);
       dispatch(changeDownloadStatus("downloaded"));
@@ -127,7 +187,7 @@ const UpdateButton: React.FC = () => {
     if (!started) return "Обновление";
     if (error) return "Ошибка";
     if (stage === "Готово") return "Готово";
-    return "Обновление репозитория";
+    return "Обновление";
   }, [error, stage, started]);
 
   const renderPanel = useCallback(() => {
@@ -197,12 +257,29 @@ const UpdateButton: React.FC = () => {
             </div>
           )}
 
+          {error && <div className="mt-2 text-xs text-red-500">{error}</div>}
 
-          {error && (
-            <div className="mt-2 text-xs text-red-500">
-              {error}
+          <div className="mt-3">
+            <div className="mb-1 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Логи обновления (тест)</span>
+              <button
+                type="button"
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+                onClick={clearLogs}
+              >
+                Очистить
+              </button>
             </div>
-          )}
+            <div
+              className="h-40 w-full overflow-auto rounded-md border bg-muted/30 p-2 font-mono text-[11px] leading-4"
+              style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}
+            >
+              {outputRef.current.map((line, idx) => (
+                <div key={idx}>{line}</div>
+              ))}
+              <div ref={logEndRef} />
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

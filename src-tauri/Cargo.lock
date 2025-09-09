@@ -8,6 +8,7 @@ version = "0.0.13"
 dependencies = [
  "bcrypt",
  "dotenvy",
+ "globset",
  "ignore",
  "log",
  "reqwest",

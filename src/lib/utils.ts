@@ -100,6 +100,7 @@ export async function getPlayerSystemInfo() {
 
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
+import axios from "axios";
 
 async function checkAndUpdate(toaster: typeof toast) {
   try {
@@ -120,3 +121,60 @@ async function checkAndUpdate(toaster: typeof toast) {
     });
   }
 }
+
+
+
+// export const whitelistIp = async (endpoint: string, payload: { address: string; login: string; accessToken: string }) => {
+//   const res = await tfetch(`${endpoint}/ip-whitelist`, {
+//     method: "POST",
+//     timeout: 20, // seconds
+//     responseType: ResponseType.JSON,
+//     headers: { "Content-Type": "application/json" },
+//     body: { type: "Json", payload }
+//   });
+//   if (res.status !== 200) {
+//     const msg = typeof res.data === "string" ? res.data : (res.data?.error ?? "Whitelist failed");
+//     throw new Error(String(msg));
+//   }
+//   return res.data;
+// };
+
+
+const withAbortSignal = (timeoutMs: number): AbortSignal => {
+  if (typeof (AbortSignal as any).timeout === "function") {
+    return (AbortSignal as any).timeout(timeoutMs);
+  }
+  const c = new AbortController();
+  setTimeout(() => c.abort(new DOMException("Timeout", "AbortError")), timeoutMs);
+  return c.signal;
+};
+
+export const getPublicIp = async (timeoutSec = 10): Promise<string> => {
+  const signal = withAbortSignal(timeoutSec * 1000);
+  const res = await axios.get<{ ip: string }>("https://api.ipify.org", {
+    params: { format: "json" },
+    timeout: timeoutSec * 1000,
+    signal,
+  });
+  if (res.status !== 200 || !res.data?.ip) throw new Error("Failed to get public IP");
+  return res.data.ip;
+};
+
+export const whitelistIp = async (
+  endpoint: string,
+  payload: { login: string; accessToken: string; address?: string },
+  timeoutSec = 15
+) => {
+  const signal = withAbortSignal(timeoutSec * 1000);
+  const res = await axios.post(`${endpoint}/ipWhitelist`, payload, {
+    timeout: timeoutSec * 1000,
+    signal,
+    headers: { "Content-Type": "application/json" },
+    // withCredentials: true, // uncomment if backend uses cookies/sessions
+  });
+  if (res.status < 200 || res.status >= 300) {
+    const msg = typeof res.data === "string" ? res.data : (res.data?.error ?? "Whitelist failed");
+    throw new Error(String(msg));
+  }
+  return res.data;
+};

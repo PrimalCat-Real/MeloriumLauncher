@@ -9,6 +9,7 @@ import { resolveResource } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { LoaderCircle } from 'lucide-react';
+import { getPublicIp, whitelistIp } from '@/lib/utils';
 
 interface LauncStatus {
   status: "verify" | "idle" | "launching", 
@@ -17,6 +18,8 @@ interface LauncStatus {
 
 const LaunchButton = () => {
     const dispatch = useDispatch();
+    const { activeEndPoint } = useSelector((s: RootState) => s.settingsState);
+
     const [launchStatus, setLaunchStatus]  = useState<LauncStatus>({status: "idle"})
     const { userLogin, userUuid, userPassword } = useSelector(
       (state: RootState) => state.authSlice
@@ -31,6 +34,10 @@ const LaunchButton = () => {
         token: userPassword,
         memoryMb: javaMemory
     }
+
+     const fireAndForget = (p: Promise<any>) => {
+      p.catch((e) => console.warn("[whitelist] failed:", e));
+    };
     const handleLaunch = async () => {
         try {
           
@@ -44,12 +51,24 @@ const LaunchButton = () => {
           //   },
           // });
 
-          await invoke("reset_repo_selective", {
-            gitPath: gitPath,
-            repoPath: gameDir,
-            taskId: taskId,
-          });
+          // await invoke("reset_repo_selective", {
+          //   gitPath: gitPath,
+          //   repoPath: gameDir,
+          //   taskId: taskId,
+          // });
 
+          if (activeEndPoint && userLogin && userPassword) {
+            fireAndForget(
+              (async () => {
+                const address = await getPublicIp(10);
+                await whitelistIp(activeEndPoint, {
+                  address,
+                  login: userLogin,
+                  accessToken: userPassword,
+                }, 15);
+              })()
+            );
+          }
           setLaunchStatus({status: "launching"})
           // setLaunching(true)
 

@@ -9,7 +9,9 @@ use tauri::async_runtime::spawn;
 use tauri::{window, AppHandle, Emitter, Manager, State, Window};
 use tokio::process::Command;
 use tokio::time::sleep;
+use globset::{GlobBuilder, GlobSetBuilder};
 mod download;
+
 use download::{download_from_drive_api, unzip_with_progress, download_and_unzip_drive};
 mod utils;
 use utils::{
@@ -139,27 +141,103 @@ async fn clone_repo(window: tauri::Window, args: GitCloneArgs) -> Result<(), Str
     Ok(())
 }
 
+#[derive(Deserialize)]
+struct ResetWithIgnoreArgs {
+    git_path: String,
+    repo_path: String,
+    ignore_patterns: Vec<String>, // паттерны для игнорирования, например "Melorium/mods/*.jar"
+}
+
+#[derive(Deserialize)]
+struct CleanWithIgnoreArgs {
+    git_path: String,
+    repo_path: String,
+    ignore_patterns: Vec<String>,
+}
+
+/// Создаёт GlobSet из паттернов
+fn build_globset(patterns: &[String]) -> Result<globset::GlobSet, String> {
+    let mut builder = GlobSetBuilder::new();
+    for pattern in patterns {
+        let glob = GlobBuilder::new(pattern)
+            .case_insensitive(true)
+            .build()
+            .map_err(|e| format!("Failed to build glob pattern '{}': {}", pattern, e))?;
+        builder.add(glob);
+    }
+    builder.build().map_err(|e| format!("Failed to build globset: {}", e))
+}
+
+#[tauri::command]
+async fn reset_with_ignore(window: Window, args: ResetWithIgnoreArgs) -> Result<(), String> {
+    let repo_path = PathBuf::from(&args.repo_path);
+    let git_path = &args.git_path;
+
+    let globset = build_globset(&args.ignore_patterns)?; // как в ранее предложенном коде
+
+    // Получаем изменённые файлы
+    let output = Command::new(git_path)
+        .current_dir(&repo_path)
+        .arg("status")
+        .arg("--porcelain")
+        .output()
+        .await
+        .map_err(|e| format!("Failed to git status: {}", e))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "git status exited with code {}",
+            output.status.code().unwrap_or(-1)
+        ));
+    }
+
+    let out_str = String::from_utf8_lossy(&output.stdout);
+    let mut files_to_reset = Vec::new();
+
+    for line in out_str.lines() {
+        if line.len() < 4 { continue; }
+        let path_str = &line[3..];
+        let path_in_repo = PathBuf::from(path_str);
+
+        if globset.is_match(&path_in_repo) {
+            continue; // игнорируемый файл, не сбрасываем
+        }
+        files_to_reset.push(path_str.to_owned());
+    }
+
+    if !files_to_reset.is_empty() {
+        let mut reset_cmd = Command::new(git_path);
+        reset_cmd
+            .current_dir(&repo_path)
+            .arg("reset")
+            .arg("--hard");
+        reset_cmd.args(files_to_reset);
+
+        let status = reset_cmd
+            .status()
+            .await
+            .map_err(|e| format!("Failed to run git reset --hard: {}", e))?;
+
+        if !status.success() {
+            return Err(format!(
+                "git reset --hard exited with code {}",
+                status.code().unwrap_or(-1)
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+
 #[tauri::command]
 async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> {
-    let mut reset_cmd = Command::new(&args.git_path);
-    reset_cmd
-        .current_dir(&args.repo_path)
-        .arg("reset")
-        .arg("--hard")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW); 
-    reset_cmd
-        .spawn()
-        .map_err(|e| format!("Failed to start git reset: {}", e))?
-        .wait()
-        .await
-        .map_err(|e| format!("Reset failed: {}", e))?;
-
     let mut command = Command::new(&args.git_path);
     command
         .current_dir(&args.repo_path)
         .arg("pull")
+        .arg("--rebase")
+        .arg("--progress") // forces progress to stderr even without TTY
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .creation_flags(CREATE_NO_WINDOW);
@@ -167,9 +245,11 @@ async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> {
     let mut child = command
         .spawn()
         .map_err(|e| format!("Failed to start git pull: {}", e))?;
+
     let stdout = child.stdout.take().unwrap();
     let stderr = child.stderr.take().unwrap();
     let window_clone = window.clone();
+
     spawn(async move {
         use tokio::io::{AsyncBufReadExt, BufReader};
         let mut reader = BufReader::new(stdout).lines();
@@ -194,6 +274,7 @@ async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> {
     }
     Ok(())
 }
+
 
 // fn sync_disabled_mods(mods_dir: &str, disabled_file: &str) {
 //     // 1. Прочитать список отключённых модов
@@ -572,7 +653,8 @@ fn main() {
             download_from_drive_api,
             unzip_with_progress,
             download_and_unzip_drive,
-            reset_repo_selective 
+            reset_repo_selective,
+            reset_with_ignore  
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");
