@@ -103,115 +103,160 @@ async fn install_lfs(args: InstallLfsArgs) -> Result<(), String> {
 
 #[tauri::command]
 async fn pull_repo(app: tauri::AppHandle, args: GitPullArgs) -> Result<(), String> {
-    let emit = |s: &str| { let _ = app.emit("git-progress", s.to_string()); };
+    let emit = |event: &str, payload: &str| {
+        let _ = app.emit(event, payload.to_string());
+    };
 
-    // git pull --progress
-    let mut child = Command::new(&args.git_path)
+    emit("git-start", "fetch");
+
+    // fetch --progress
+    let mut fetch = Command::new(&args.git_path)
         .current_dir(&args.repo_path)
-        .args(["pull", "--progress", "--rebase"])
-        .stdout(Stdio::piped())
+        .env("GIT_FLUSH","1")
+        .env("GIT_TERMINAL_PROMPT","0")
+        .env("GCM_INTERACTIVE","Never")
+        .env("GIT_ASKPASS","")
+        .env("SSH_ASKPASS","")
+        .args(["-c","credential.helper=","-c","credential.interactive=never"])
+        .args(["fetch","--progress"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| format!("spawn fetch: {e}"))?;
+
+    {
+        // stream stderr inline until EOF
+        let mut err = fetch.stderr.take().unwrap();
+        let mut buf = [0u8; 4096];
+        let mut acc = Vec::<u8>::new();
+        loop {
+            match err.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => {
+                    for &b in &buf[..n] {
+                        if b == b'\n' || b == b'\r' {
+                            if !acc.is_empty() {
+                                if let Ok(line) = String::from_utf8(acc.clone()) {
+                                    emit("git-progress", &format!("[fetch] {line}"));
+                                }
+                                acc.clear();
+                            }
+                        } else { acc.push(b); }
+                    }
+                }
+                Err(e) => return Err(format!("read fetch stderr: {e}")),
+            }
+        }
+    }
+    let st_fetch = fetch.wait().await.map_err(|e| format!("wait fetch: {e}"))?;
+    if !st_fetch.success() {
+        emit("git-error", "fetch failed");
+        return Err(format!("git fetch exit {}", st_fetch.code().unwrap_or(-1)));
+    }
+
+    emit("git-start", "pull");
+
+    // pull --rebase --autostash
+    let mut pull = Command::new(&args.git_path)
+        .current_dir(&args.repo_path)
+        .env("GIT_FLUSH","1")
+        .env("GIT_TERMINAL_PROMPT","0")
+        .env("GCM_INTERACTIVE","Never")
+        .env("GIT_ASKPASS","")
+        .env("SSH_ASKPASS","")
+        .args([
+            "-c","credential.helper=",
+            "-c","credential.interactive=never",
+            "-c","user.name=Auto",
+            "-c","user.email=auto@example.invalid",
+        ])
+        .args(["pull","--progress","--rebase","--autostash","--strategy-option=theirs"])
+        .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|e| format!("spawn pull: {e}"))?;
 
-    let mut out = child.stdout.take().unwrap();
-    let mut err = child.stderr.take().unwrap();
-
-    let app1 = app.clone();
-    tauri::async_runtime::spawn(async move {
+    {
+        let mut err = pull.stderr.take().unwrap();
         let mut buf = [0u8; 4096];
-        let mut acc = String::new();
-        loop {
-            match out.read(&mut buf).await {
-                Ok(0) => break,
-                Ok(n) => for ch in String::from_utf8_lossy(&buf[..n]).chars() {
-                    if ch=='\n' || ch=='\r' { if !acc.is_empty() { let _=app1.emit("git-progress", acc.clone()); acc.clear(); } }
-                    else { acc.push(ch); }
-                },
-                Err(_) => break,
-            }
-        }
-        if !acc.is_empty() { let _=app1.emit("git-progress", acc); }
-    });
-
-    let app2 = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let mut buf = [0u8; 4096];
-        let mut acc = String::new();
+        let mut acc = Vec::<u8>::new();
         loop {
             match err.read(&mut buf).await {
                 Ok(0) => break,
-                Ok(n) => for ch in String::from_utf8_lossy(&buf[..n]).chars() {
-                    if ch=='\n' || ch=='\r' { if !acc.is_empty() { let _=app2.emit("git-progress", acc.clone()); acc.clear(); } }
-                    else { acc.push(ch); }
-                },
-                Err(_) => break,
+                Ok(n) => {
+                    for &b in &buf[..n] {
+                        if b == b'\n' || b == b'\r' {
+                            if !acc.is_empty() {
+                                if let Ok(line) = String::from_utf8(acc.clone()) {
+                                    emit("git-progress", &line);
+                                }
+                                acc.clear();
+                            }
+                        } else { acc.push(b); }
+                    }
+                }
+                Err(e) => return Err(format!("read pull stderr: {e}")),
             }
         }
-        if !acc.is_empty() { let _=app2.emit("git-progress", acc); }
-    });
-
-    let st = child.wait().await.map_err(|e| format!("wait pull: {e}"))?;
-    if !st.success() {
-        return Err(format!("git pull exit {}", st.code().unwrap_or(-1)));
+    }
+    let st_pull = pull.wait().await.map_err(|e| format!("wait pull: {e}"))?;
+    if !st_pull.success() {
+        emit("git-error", "pull failed");
+        return Err(format!("git pull exit {}", st_pull.code().unwrap_or(-1)));
     }
 
-    // git lfs pull
+    emit("git-start", "lfs");
+
+    // lfs pull --progress
     let mut lfs = Command::new(&args.git_path)
         .current_dir(&args.repo_path)
-        .args(["lfs", "pull"])
-        .stdout(Stdio::piped())
+        .env("GIT_FLUSH","1")
+        .env("GIT_TERMINAL_PROMPT","0")
+        .env("GCM_INTERACTIVE","Never")
+        .env("GIT_ASKPASS","")
+        .env("SSH_ASKPASS","")
+        .args(["-c","credential.helper=","-c","credential.interactive=never"])
+        .args(["lfs","pull"])
+        .stdout(Stdio::null())
         .stderr(Stdio::piped())
         .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .map_err(|e| format!("spawn lfs pull: {e}"))?;
 
-    let mut lfs_out = lfs.stdout.take().unwrap();
-    let mut lfs_err = lfs.stderr.take().unwrap();
-
-    let app3 = app.clone();
-    tauri::async_runtime::spawn(async move {
+    {
+        let mut err = lfs.stderr.take().unwrap();
         let mut buf = [0u8; 4096];
-        let mut acc = String::new();
+        let mut acc = Vec::<u8>::new();
         loop {
-            match lfs_out.read(&mut buf).await {
+            match err.read(&mut buf).await {
                 Ok(0) => break,
-                Ok(n) => for ch in String::from_utf8_lossy(&buf[..n]).chars() {
-                    if ch=='\n' || ch=='\r' { if !acc.is_empty() { let _=app3.emit("git-progress", format!("[lfs] {acc}")); acc.clear(); } }
-                    else { acc.push(ch); }
-                },
-                Err(_) => break,
+                Ok(n) => {
+                    for &b in &buf[..n] {
+                        if b == b'\n' || b == b'\r' {
+                            if !acc.is_empty() {
+                                if let Ok(line) = String::from_utf8(acc.clone()) {
+                                    emit("git-progress", &format!("[lfs] {line}"));
+                                }
+                                acc.clear();
+                            }
+                        } else { acc.push(b); }
+                    }
+                }
+                Err(e) => return Err(format!("read lfs stderr: {e}")),
             }
         }
-        if !acc.is_empty() { let _=app3.emit("git-progress", format!("[lfs] {acc}")); }
-    });
-
-    let app4 = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let mut buf = [0u8; 4096];
-        let mut acc = String::new();
-        loop {
-            match lfs_err.read(&mut buf).await {
-                Ok(0) => break,
-                Ok(n) => for ch in String::from_utf8_lossy(&buf[..n]).chars() {
-                    if ch=='\n' || ch=='\r' { if !acc.is_empty() { let _=app4.emit("git-progress", format!("[lfs] {acc}")); acc.clear(); } }
-                    else { acc.push(ch); }
-                },
-                Err(_) => break,
-            }
-        }
-        if !acc.is_empty() { let _=app4.emit("git-progress", format!("[lfs] {acc}")); }
-    });
-
-    let st2 = lfs.wait().await.map_err(|e| format!("wait lfs pull: {e}"))?;
-    if !st2.success() {
-        return Err(format!("git lfs pull exit {}", st2.code().unwrap_or(-1)));
     }
+    let st_lfs = lfs.wait().await.map_err(|e| format!("wait lfs: {e}"))?;
+    if !st_lfs.success() {
+        emit("git-error", "lfs failed");
+        return Err(format!("git lfs pull exit {}", st_lfs.code().unwrap_or(-1)));
+    }
+
+    emit("git-complete", "ok");
     Ok(())
 }
-
-
 // fn sync_disabled_mods(mods_dir: &str, disabled_file: &str) {
 //     // 1. Прочитать список отключённых модов
 //     let disabled = std::fs::read_to_string(disabled_file)

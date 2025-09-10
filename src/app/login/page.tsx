@@ -62,23 +62,23 @@ const LoginPage = () => {
    const handleLogin = async () => {
     // setLoading(true)
 
-    // if (username === 'test' && password === 'test') {
-    //   dispatch(
-    //     setUserData({
-    //       userUuid: 'e8a18932-c201-493a-b1b0-85853c19fde6',
-    //       authStatus: true,
-    //       userLogin: username,
-    //       userPassword: password,
-    //       donateTokens: 99999
-    //     })
-    //   );
-    //   toast.success('Вход выполнен успешно!', { description: 'Вы вошли как тестовый пользователь.' });
-    //   // alert("login")
-    //   // router.push('/')
-    //   router.replace('/');
+    if (username === 'test' && password === 'test') {
+      dispatch(
+        setUserData({
+          userUuid: 'e8a18932-c201-493a-b1b0-85853c19fde6',
+          authStatus: true,
+          userLogin: username,
+          userPassword: password,
+          donateTokens: 99999
+        })
+      );
+      toast.success('Вход выполнен успешно!', { description: 'Вы вошли как тестовый пользователь.' });
+      // alert("login")
+      // router.push('/')
+      router.replace('/');
       
-    //   return;
-    // }
+      return;
+    }
 
     mutation.mutate(
       { login: username, password },
