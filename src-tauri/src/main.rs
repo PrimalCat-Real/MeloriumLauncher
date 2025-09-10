@@ -2,9 +2,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::Deserialize;
-use std::process::Stdio;
+use tauri::path::BaseDirectory;
+use tokio::io::AsyncReadExt;
+use std::{fs, path::PathBuf, process::Stdio};
 use std::{path::Path, time::Duration};
-use std::{path::PathBuf, sync::Arc};
+use std::{sync::Arc};
 use tauri::async_runtime::spawn;
 use tauri::{window, AppHandle, Emitter, Manager, State, Window};
 use tokio::process::Command;
@@ -34,112 +36,14 @@ struct GitCloneArgs {
     destination_path: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct GitPullArgs {
     git_path: String,
     repo_path: String,
 }
 
-// #[tauri::command]
-// async fn clone_repo(window: tauri::Window, args: GitCloneArgs) -> Result<(), String> {
-//     let mut command = tokio::process::Command::new(&args.git_path);
-//     command
-//         .arg("clone")
-//         .arg("--progress")
-//         .arg("--verbose")
-//         .arg(&args.repository_url)
-//         .arg(&args.destination_path)
-//         .stdout(std::process::Stdio::piped())
-//         .stderr(std::process::Stdio::piped());
-
-//     let mut child = command.spawn().map_err(|e| format!("Failed to start git: {}", e))?;
-
-//     let stdout = child.stdout.take().unwrap();
-//     let stderr = child.stderr.take().unwrap();
-//     let window_clone = window.clone();
-//     tauri::async_runtime::spawn(async move {
-//         use tokio::io::{AsyncBufReadExt, BufReader};
-//         let mut reader = BufReader::new(stdout).lines();
-//         while let Ok(Some(line)) = reader.next_line().await {
-//             let _ = window_clone.emit("git-progress", Some(line));
-//         }
-//         let mut err_reader = BufReader::new(stderr).lines();
-//         while let Ok(Some(line)) = err_reader.next_line().await {
-//             let _ = window_clone.emit("git-progress", Some(line));
-//         }
-//     });
-
-//     let status = child.wait().await.map_err(|e| format!("Git failed: {}", e))?;
-//     if !status.success() {
-//         return Err(format!("Git exited with code: {}", status.code().unwrap_or(-1)));
-//     }
-//     Ok(())
-// }
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-#[tauri::command]
-async fn clone_repo(window: tauri::Window, args: GitCloneArgs) -> Result<(), String> {
-    let mut command = tokio::process::Command::new(&args.git_path);
-    command
-        .arg("clone")
-        .arg("--progress")
-        .arg("--verbose")
-        .arg(&args.repository_url)
-        .arg(&args.destination_path)
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW);
-
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("Failed to start git: {}", e))?;
-
-    let mut stderr = child.stderr.take().unwrap();
-    let window_clone = window.clone();
-
-    tauri::async_runtime::spawn(async move {
-        use tokio::io::AsyncReadExt;
-
-        let mut buffer = [0u8; 1024];
-        let mut partial = String::new();
-
-        loop {
-            match stderr.read(&mut buffer).await {
-                Ok(0) => break,
-                Ok(n) => {
-                    let chunk = String::from_utf8_lossy(&buffer[..n]);
-                    for c in chunk.chars() {
-                        if c == '\r' || c == '\n' {
-                            if !partial.is_empty() {
-                                let _ = window_clone.emit("git-progress", Some(partial.clone()));
-                                partial.clear();
-                            }
-                        } else {
-                            partial.push(c);
-                        }
-                    }
-                }
-                Err(_) => break,
-            }
-        }
-
-        if !partial.is_empty() {
-            let _ = window_clone.emit("git-progress", Some(partial));
-        }
-    });
-
-    let status = child
-        .wait()
-        .await
-        .map_err(|e| format!("Git failed: {}", e))?;
-    if !status.success() {
-        return Err(format!(
-            "Git exited with code: {}",
-            status.code().unwrap_or(-1)
-        ));
-    }
-    Ok(())
-}
 
 #[derive(Deserialize)]
 struct ResetWithIgnoreArgs {
@@ -168,109 +72,141 @@ fn build_globset(patterns: &[String]) -> Result<globset::GlobSet, String> {
     builder.build().map_err(|e| format!("Failed to build globset: {}", e))
 }
 
+#[derive(serde::Deserialize)]
+struct InstallLfsArgs { git_path: String }
+
 #[tauri::command]
-async fn reset_with_ignore(window: Window, args: ResetWithIgnoreArgs) -> Result<(), String> {
-    let repo_path = PathBuf::from(&args.repo_path);
-    let git_path = &args.git_path;
-
-    let globset = build_globset(&args.ignore_patterns)?; // как в ранее предложенном коде
-
-    // Получаем изменённые файлы
-    let output = Command::new(git_path)
-        .current_dir(&repo_path)
-        .arg("status")
-        .arg("--porcelain")
-        .output()
-        .await
-        .map_err(|e| format!("Failed to git status: {}", e))?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "git status exited with code {}",
-            output.status.code().unwrap_or(-1)
-        ));
+async fn install_lfs(args: InstallLfsArgs) -> Result<(), String> {
+    // проверим наличие подкоманды
+    let ver = Command::new(&args.git_path)
+        .args(["lfs", "version"])
+        .stdout(Stdio::piped()).stderr(Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW)
+        .output().await
+        .map_err(|e| format!("git lfs version: {e}"))?;
+    if !ver.status.success() {
+        return Err(format!("'git lfs' недоступен: {}", String::from_utf8_lossy(&ver.stderr)));
     }
 
-    let out_str = String::from_utf8_lossy(&output.stdout);
-    let mut files_to_reset = Vec::new();
-
-    for line in out_str.lines() {
-        if line.len() < 4 { continue; }
-        let path_str = &line[3..];
-        let path_in_repo = PathBuf::from(path_str);
-
-        if globset.is_match(&path_in_repo) {
-            continue; // игнорируемый файл, не сбрасываем
-        }
-        files_to_reset.push(path_str.to_owned());
+    // установка фильтров
+    let st = Command::new(&args.git_path)
+        .args(["lfs", "install", "--force"])
+        .stdout(Stdio::null()).stderr(Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW)
+        .status().await
+        .map_err(|e| format!("git lfs install: {e}"))?;
+    if !st.success() {
+        return Err(format!("git lfs install exit {}", st.code().unwrap_or(-1)));
     }
-
-    if !files_to_reset.is_empty() {
-        let mut reset_cmd = Command::new(git_path);
-        reset_cmd
-            .current_dir(&repo_path)
-            .arg("reset")
-            .arg("--hard");
-        reset_cmd.args(files_to_reset);
-
-        let status = reset_cmd
-            .status()
-            .await
-            .map_err(|e| format!("Failed to run git reset --hard: {}", e))?;
-
-        if !status.success() {
-            return Err(format!(
-                "git reset --hard exited with code {}",
-                status.code().unwrap_or(-1)
-            ));
-        }
-    }
-
     Ok(())
 }
 
-
 #[tauri::command]
-async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> {
-    let mut command = Command::new(&args.git_path);
-    command
+async fn pull_repo(app: tauri::AppHandle, args: GitPullArgs) -> Result<(), String> {
+    let emit = |s: &str| { let _ = app.emit("git-progress", s.to_string()); };
+
+    // git pull --progress
+    let mut child = Command::new(&args.git_path)
         .current_dir(&args.repo_path)
-        .arg("pull")
-        .arg("--rebase")
-        .arg("--progress") // forces progress to stderr even without TTY
+        .args(["pull", "--progress", "--rebase"])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW);
-
-    let mut child = command
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn()
-        .map_err(|e| format!("Failed to start git pull: {}", e))?;
+        .map_err(|e| format!("spawn pull: {e}"))?;
 
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
-    let window_clone = window.clone();
+    let mut out = child.stdout.take().unwrap();
+    let mut err = child.stderr.take().unwrap();
 
-    spawn(async move {
-        use tokio::io::{AsyncBufReadExt, BufReader};
-        let mut reader = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = reader.next_line().await {
-            let _ = window_clone.emit("git-progress", Some(line));
+    let app1 = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut buf = [0u8; 4096];
+        let mut acc = String::new();
+        loop {
+            match out.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => for ch in String::from_utf8_lossy(&buf[..n]).chars() {
+                    if ch=='\n' || ch=='\r' { if !acc.is_empty() { let _=app1.emit("git-progress", acc.clone()); acc.clear(); } }
+                    else { acc.push(ch); }
+                },
+                Err(_) => break,
+            }
         }
-        let mut err_reader = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = err_reader.next_line().await {
-            let _ = window_clone.emit("git-progress", Some(line));
-        }
+        if !acc.is_empty() { let _=app1.emit("git-progress", acc); }
     });
 
-    let status = child
-        .wait()
-        .await
-        .map_err(|e| format!("Git failed: {}", e))?;
-    if !status.success() {
-        return Err(format!(
-            "Git exited with code: {}",
-            status.code().unwrap_or(-1)
-        ));
+    let app2 = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut buf = [0u8; 4096];
+        let mut acc = String::new();
+        loop {
+            match err.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => for ch in String::from_utf8_lossy(&buf[..n]).chars() {
+                    if ch=='\n' || ch=='\r' { if !acc.is_empty() { let _=app2.emit("git-progress", acc.clone()); acc.clear(); } }
+                    else { acc.push(ch); }
+                },
+                Err(_) => break,
+            }
+        }
+        if !acc.is_empty() { let _=app2.emit("git-progress", acc); }
+    });
+
+    let st = child.wait().await.map_err(|e| format!("wait pull: {e}"))?;
+    if !st.success() {
+        return Err(format!("git pull exit {}", st.code().unwrap_or(-1)));
+    }
+
+    // git lfs pull
+    let mut lfs = Command::new(&args.git_path)
+        .current_dir(&args.repo_path)
+        .args(["lfs", "pull"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| format!("spawn lfs pull: {e}"))?;
+
+    let mut lfs_out = lfs.stdout.take().unwrap();
+    let mut lfs_err = lfs.stderr.take().unwrap();
+
+    let app3 = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut buf = [0u8; 4096];
+        let mut acc = String::new();
+        loop {
+            match lfs_out.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => for ch in String::from_utf8_lossy(&buf[..n]).chars() {
+                    if ch=='\n' || ch=='\r' { if !acc.is_empty() { let _=app3.emit("git-progress", format!("[lfs] {acc}")); acc.clear(); } }
+                    else { acc.push(ch); }
+                },
+                Err(_) => break,
+            }
+        }
+        if !acc.is_empty() { let _=app3.emit("git-progress", format!("[lfs] {acc}")); }
+    });
+
+    let app4 = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut buf = [0u8; 4096];
+        let mut acc = String::new();
+        loop {
+            match lfs_err.read(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => for ch in String::from_utf8_lossy(&buf[..n]).chars() {
+                    if ch=='\n' || ch=='\r' { if !acc.is_empty() { let _=app4.emit("git-progress", format!("[lfs] {acc}")); acc.clear(); } }
+                    else { acc.push(ch); }
+                },
+                Err(_) => break,
+            }
+        }
+        if !acc.is_empty() { let _=app4.emit("git-progress", format!("[lfs] {acc}")); }
+    });
+
+    let st2 = lfs.wait().await.map_err(|e| format!("wait lfs pull: {e}"))?;
+    if !st2.success() {
+        return Err(format!("git lfs pull exit {}", st2.code().unwrap_or(-1)));
     }
     Ok(())
 }
@@ -300,272 +236,7 @@ async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> {
 //     }
 // }
 
-#[derive(Deserialize)]
-struct ResetRepoArgs {
-    git_path: String,
-    repo_path: String,
-}
 
-#[tauri::command]
-async fn reset_repo(_window: tauri::Window, args: ResetRepoArgs) -> Result<(), String> {
-    // 1. Initialize the directory as a Git repository if it isn't already.
-    let mut init = tokio::process::Command::new(&args.git_path);
-    init
-        .current_dir(&args.repo_path)
-        .args(["init"])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW);
-
-    let init_status = init
-        .spawn()
-        .map_err(|e| format!("spawn init: {e}"))?
-        .wait()
-        .await
-        .map_err(|e| format!("init failed: {e}"))?;
-
-    if !init_status.success() {
-        // You might want to handle this differently, but for now, let's return an error.
-        return Err(format!(
-            "git init exited with code: {}",
-            init_status.code().unwrap_or(-1)
-        ));
-    }
-
-    // 2. git reset --hard HEAD
-    let mut reset = tokio::process::Command::new(&args.git_path);
-    reset
-        .current_dir(&args.repo_path)
-        .args(["reset", "--hard", "HEAD"])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW);
-
-    let reset_status = reset
-        .spawn()
-        .map_err(|e| format!("spawn reset: {e}"))?
-        .wait()
-        .await
-        .map_err(|e| format!("reset failed: {e}"))?;
-
-    if !reset_status.success() {
-        return Err(format!(
-            "git reset exited with code: {}",
-            reset_status.code().unwrap_or(-1)
-        ));
-    }
-
-    // 3. git clean -fd  (remove untracked files/dirs)
-    let mut clean = tokio::process::Command::new(&args.git_path);
-    clean
-        .current_dir(&args.repo_path)
-        .args(["clean", "-fd"])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW);
-
-    let clean_status = clean
-        .spawn()
-        .map_err(|e| format!("spawn clean: {e}"))?
-        .wait()
-        .await
-        .map_err(|e| format!("clean failed: {e}"))?;
-
-    if !clean_status.success() {
-        return Err(format!(
-            "git clean exited with code: {}",
-            clean_status.code().unwrap_or(-1)
-        ));
-    }
-
-    Ok(())
-}
-
-#[derive(Deserialize)]
-struct AssumeUnchangedArgs {
-    base_dir: String,
-    files: Vec<String>,
-}
-
-#[tauri::command]
-async fn skip_worktree(args: AssumeUnchangedArgs) -> Result<(), String> {
-    let mods_dir = Path::new(&args.base_dir);
-    if !mods_dir.exists() {
-        return Err(format!("Mods dir not found: {:?}", mods_dir));
-    }
-
-    for file in &args.files {
-        let full_path = {
-            let path = Path::new(file);
-            if path.is_absolute() {
-                path.to_path_buf()
-            } else {
-                mods_dir.join(path)
-            }
-        };
-
-        if !full_path.exists() {
-            println!("⛔️ Пропущен (не найден): {}", full_path.display());
-            continue;
-        }
-
-        // Проверка: отслеживается ли файл git'ом
-        let ls_output = tokio::process::Command::new("git")
-            .current_dir(&args.base_dir)
-            .arg("ls-files")
-            .arg("--error-unmatch")
-            .arg(&full_path)
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-            .await;
-
-        match ls_output {
-            Ok(ref output) if !output.status.success() => {
-                println!(
-                    "⛔️ Файл не отслеживается git'ом, пропущен: {}",
-                    full_path.display()
-                );
-                continue;
-            }
-            Err(e) => {
-                println!(
-                    "❌ Ошибка при проверке отслеживания файла {}: {}",
-                    full_path.display(),
-                    e
-                );
-                continue;
-            }
-            _ => {}
-        }
-
-        // Retry loop
-        let mut success = false;
-        for attempt in 1..=3 {
-            println!(
-                "⏳ Попытка {}: git --skip-worktree {}",
-                attempt,
-                full_path.display()
-            );
-
-            let status = tokio::process::Command::new("git")
-                .current_dir(&args.base_dir)
-                .arg("update-index")
-                .arg("--skip-worktree")
-                .arg(&full_path)
-                .creation_flags(CREATE_NO_WINDOW)
-                .status()
-                .await;
-
-            match status {
-                Ok(s) if s.success() => {
-                    println!("✅ skip-worktree: {}", full_path.display());
-                    success = true;
-                    break;
-                }
-                Ok(s) => {
-                    println!(
-                        "⚠️ Git exited with code {} on attempt {} for {}",
-                        s.code().unwrap_or(-1),
-                        attempt,
-                        full_path.display()
-                    );
-                }
-                Err(e) => {
-                    println!(
-                        "❌ Git spawn failed on attempt {} for {}: {}",
-                        attempt,
-                        full_path.display(),
-                        e
-                    );
-                }
-            }
-
-            sleep(Duration::from_millis(500)).await;
-        }
-
-        if !success {
-            return Err(format!(
-                "git update-index --skip-worktree failed after 3 attempts for {}",
-                full_path.display()
-            ));
-        }
-    }
-
-    Ok(())
-}
-
-// #[tauri::command]
-// async fn skip_worktree(args: AssumeUnchangedArgs) -> Result<(), String> {
-//     let mods_dir = Path::new(&args.base_dir);
-//     if !mods_dir.exists() {
-//         return Err(format!("Mods dir not found: {:?}", mods_dir));
-//     }
-
-//     // for file in &args.files {
-//     //     let full_path = mods_dir.join(file);
-
-//     //     if !full_path.exists() {
-//     //         continue;
-//     //     }
-
-//     //     let mut cmd = tokio::process::Command::new("git");
-//     //     cmd.current_dir(&args.base_dir)
-//     //         .arg("update-index")
-//     //         .arg("--skip-worktree")
-//     //         .arg(full_path);
-
-//     //     let status = cmd
-//     //         .status()
-//     //         .await
-//     //         .map_err(|e| format!("git spawn failed: {}", e))?;
-
-//     //     if !status.success() {
-//     //         return Err(format!(
-//     //             "git exited with code {} for file {}",
-//     //             status.code().unwrap_or(-1),
-//     //             file
-//     //         ));
-//     //     }
-//     // }
-//     for file in &args.files {
-//         let full_path = {
-//             let path = Path::new(file);
-//             if path.is_absolute() {
-//                 path.to_path_buf()
-//             } else {
-//                 mods_dir.join(path)
-//             }
-//         };
-
-//         if !full_path.exists() {
-//             println!("⛔️ Пропущен (не найден): {}", full_path.display());
-//             continue;
-//         }
-
-//         println!("✅ skip-worktree: {}", full_path.display());
-
-//         let mut cmd = tokio::process::Command::new("git");
-//         cmd.current_dir(&args.base_dir)
-//             .arg("update-index")
-//             .arg("--skip-worktree")
-//             .arg(&full_path);
-
-//         let status = cmd
-//             .status()
-//             .await
-//             .map_err(|e| format!("git spawn failed: {}", e))?;
-
-//         if !status.success() {
-//             return Err(format!(
-//                 "git exited with code {} for file {}",
-//                 status.code().unwrap_or(-1),
-//                 full_path.display()
-//             ));
-//         }
-//     }
-
-//     Ok(())
-// }
 
 #[derive(Deserialize)]
 struct GitCheckUpdateArgs {
@@ -637,24 +308,21 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_hwinfo::init())
         .invoke_handler(tauri::generate_handler![
-            clone_repo,
             pull_repo,
             get_local_version_json,
             is_dir_empty,
             launch_minecraft,
             authenticate,
-            reset_repo,
             get_total_memory_mb,
             toggle_mod_file,
             list_mod_jar_files,
-            skip_worktree,
             check_git_update,
             download_mod_file,
             download_from_drive_api,
             unzip_with_progress,
             download_and_unzip_drive,
             reset_repo_selective,
-            reset_with_ignore  
+            install_lfs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");

@@ -21,7 +21,7 @@
 
 import subprocess
 
-java_path = r"E:\Projects\oldMelorium\java_versions\zulu21.42.19-ca-jre21.0.7-win_x64\bin\javaw.exe"
+java_path = r"E:\Projects\melorium-launcher\test\java_versions\zulu21.42.19-ca-jre21.0.7-win_x64\bin\javaw.exe"
 args_file = "@args.txt"  # Можно указать полный путь, если нужно
 
 result = subprocess.run([java_path, args_file], capture_output=True, text=True)
