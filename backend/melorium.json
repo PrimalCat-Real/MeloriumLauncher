@@ -1,0 +1,597 @@
+{
+    "presets": [
+        {
+            "id": "all",
+            "name": "Все Моды",
+            "description": "Все моды доустпные",
+            "mods": "all"
+        },
+        {
+            "id": "minimum",
+            "name": "Минимум",
+            "description": "Минимум модов для пупсов",
+            "mods": ["sodium"]
+        },
+        {
+            "id": "medium",
+            "name": "База",
+            "description": "конфортное количество модов",
+            "mods": ["sodium"]
+        }
+    ],
+    "mods": [
+      {
+        "id": "sodium",
+        "name": "Sodium",
+        "file": "sodium-neoforge-0.6.13+mc1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/AANobbMI/295862f4724dc3f78df3447ad6072b2dcd3ef0c9_96.webp",
+        "description": "Оптимизация графики, шейдеры и многое другое.",
+        "enabled": true
+      },
+      {
+        "id": "sodium_extra",
+        "name": "Sodium Extra",
+        "file": "sodium-extra-neoforge-0.6.0+mc1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/PtjYWJkn/0df4fb22a11e1dcb5e83cb0aadd275b571aca7a9_96.webp",
+        "description": "",
+        "enabled": true,
+        "dependsOn": ["sodium"]
+      },
+      {
+        "id": "lithium",
+        "name": "Lithium",
+        "file": "lithium-neoforge-0.15.0+mc1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/gvQqBUqZ/bcc8686c13af0143adf4285d741256af824f70b7_96.webp",
+        "description": "",
+        "enabled": true
+      },
+      {
+        "id": "ferrite",
+        "name": "FerriteCore",
+        "file": "ferritecore-7.0.2-neoforge.jar",
+        "image": "https://cdn.modrinth.com/data/uXXizFIs/222a126f26f8f9ae1eb339f3b767677f18bff31f_96.webp",
+        "description": "",
+        "enabled": true
+      },
+      {
+        "id": "immediately_fast",
+        "name": "ImmediatelyFast",
+        "file": "ImmediatelyFast-NeoForge-1.6.6+1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/5ZwdcRci/e57b6b451425692ac17ad322d5e14bea686a383a_96.webp",
+        "description": "",
+        "enabled": true
+      },
+      {
+        "id": "entity_model_features",
+        "name": "[EMF] Entity Model Features",
+        "file": "entity_model_features_neoforge_1.21.1-2.4.1.jar",
+        "image": "https://cdn.modrinth.com/data/4I1XuqiY/6e5bbd0d06b1741bfdab6c0cfab6de8fdaf0064c_96.webp",
+        "description": "",
+        "enabled": true
+      },
+      {
+        "id": "entity_texture_features",
+        "name": "[ETF] Entity Texture Features",
+        "file": "entity_texture_features_neoforge_1.21.1-6.2.9.jar",
+        "image": "https://cdn.modrinth.com/data/BVzZfTc1/af683d206d50b05258d865b0d6e4aa2f2cee12f2_96.webp",
+        "description": "",
+        "enabled": true
+      },
+      {
+        "id": "controlling",
+        "name": "Controlling",
+        "file": "Controlling-neoforge-1.21.1-19.0.5.jar",
+        "image": "https://cdn.modrinth.com/data/xv94TkTM/bdb6feb3d04ca37da4ed5aa73fef062a39d8b3e5_96.webp",
+        "description": "",
+        "enabled": true
+      },
+      {
+        "id": "iris_flywheel_compat",
+        "name": "Iris & Oculus Flywheel Compat",
+        "file": "iris-flywheel-compat-NeoForge-2.0.4.jar",
+        "image": "https://cdn.modrinth.com/data/ndHYMY2K/7d3794f7fdc4974ce4386bfc3e0ec27140a33de5.png",
+        "description": "",
+        "dependsOn": ["iris"],
+        "enabled": true
+      },
+      {
+        "id": "colorwheel",
+        "name": "Colorwheel",
+        "file": "colorwheel-neoforge-0.2.3+mc1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/BzHgFoGz/a2808297ead0419d38d9ec23c5c1e594bc757eed_96.webp",
+        "description": "",
+        "dependsOn": ["iris"],
+        "enabled": true
+      },
+      {
+        "id": "colorwheel_patcher",
+        "name": "Colorwheel Patcher",
+        "file": "colorwheel_patcher-neoforge-0.2.4+mc1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/KPsw5jDu/e572663313f66081a2f98121468b8b1cf555f2ab_96.webp",
+        "description": "",
+        "dependsOn": ["colorwheel"],
+        "enabled": true
+      },
+      {
+        "id": "jade",
+        "name": "Jade",
+        "file": "Jade-1.21.1-NeoForge-15.10.3.jar",
+        "image": "https://cdn.modrinth.com/data/xuDOzCLy/b04217bc2b7dc524c4d12f81ff42cc1cefb9b0fc_96.webp",
+        "description": "",
+        "enabled": true
+      },
+      {
+        "id": "jade_addons",
+        "name": "Jade Addons",
+        "file": "JadeAddons-1.21.1-NeoForge-6.1.0.jar",
+        "image": "https://cdn.modrinth.com/data/xuDOzCLy/b04217bc2b7dc524c4d12f81ff42cc1cefb9b0fc_96.webp",
+        "description": "",
+        "dependsOn": ["jade"],
+        "enabled": true
+      },
+      {
+        "id": "overflowing_bars",
+        "name": "Overflowing Bars",
+        "file": "OverflowingBars-v21.1.1-1.21.1-NeoForge.jar",
+        "image": "https://cdn.modrinth.com/data/XD7XOrAF/cf44cdc731da7eb473b9e682b74b9c9bbdb49ce4_96.webp",
+        "description": "",
+        "enabled": true
+      },
+      {
+        "id": "notenoughanimations",
+        "name": "Not Enough Animations",
+        "file": "notenoughanimations-neoforge-1.10.1-mc1.21.jar",
+        "image": "https://cdn.modrinth.com/data/MPCX6s5C/b97fd5f7a893165052408b747286d6eb38d57abb_96.webp",
+        "description": "",
+        "enabled": true
+      },
+      {
+        "id": "iris",
+        "name": "Iris",
+        "file": "iris-neoforge-1.8.12+mc1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/YL57xq9U/18d0e7f076d3d6ed5bedd472b853909aac5da202_96.webp",
+        "description": "",
+        "enabled": true,
+        "dependsOn": ["sodium"]
+      },
+      {
+        "id": "armor_statues",
+        "name": "Armor Statues",
+        "file": "ArmorStatues-v21.1.0-1.21.1-NeoForge.jar",
+        "image": "https://cdn.modrinth.com/data/bbGCtEvb/005eb8a0a3b751e6a595757743a7032353776f44_96.webp",
+        "description": "",
+        "enabled": true
+      },
+      {
+        "id": "bwncr",
+        "name": "Bad Wither No Cookie - Reloaded",
+        "file": "bwncr-neoforge-1.21.1-3.20.3.jar",
+        "image": "https://cdn.modrinth.com/data/lL2MtE37/a6e0b3969dec2c2fc98081d5f95ae8edac8ada95_96.webp",
+        "description": "",
+        "enabled": true
+      },
+      {
+        "id": "axiom",
+        "name": "Axiom",
+        "file": "Axiom-4.9.1-for-MC1.21.jar",
+        "image": "https://cdn.modrinth.com/data/N6n5dqoA/dd175669d5ac228dc00453d13528ad26c1f056ac.png",
+        "description": "",
+        "enabled": false
+      },
+      {
+        "id": "betterbiomeblend",
+        "name": "Better Biome Reblend",
+        "file": "betterbiomeblend-1.5.2.jar",
+        "image": "https://cdn.modrinth.com/data/Xh8hkQmD/83bbb48fd905dceeac6b781017c7dbd35a6bf957_96.webp",
+        "description": "Improves biome colors",
+        "enabled": true
+      },
+      {
+        "id": "better-clouds",
+        "name": "Better Clouds",
+        "file": "better-clouds-1.7.17+1.21.1-neoforge.jar",
+        "image": "https://cdn.modrinth.com/data/5srFLIaK/68edb3cf18c96196450b84f467e7870f29a29554_96.webp",
+        "description": "Beautiful clouds in touch with the vanilla style",
+        "enabled": true
+      },
+      {
+        "id": "BetterThirdPerson",
+        "name": "Better Third Person",
+        "file": "BetterThirdPerson-neoforge-1.9.0.jar",
+        "image": "https://cdn.modrinth.com/data/G1s2WpNo/icon.png",
+        "description": "Improves third person camera view.",
+        "enabled": false
+      },
+      {
+        "id": "BetterF3",
+        "name": "BetterF3",
+        "file": "BetterF3-11.0.3-NeoForge-1.21.1.jar",
+        "image": "https://modrinth.com/mod/betterf3",
+        "description": "BetterF3 is a mod that replaces Minecraft's original debug HUD with a highly customizable, more human-readable HUD.",
+        "enabled": false
+      },
+      {
+        "id": "bobby",
+        "name": "Bobby",
+        "file": "bobby-5.2.4+mc1.21.jar",
+        "image": "https://cdn.modrinth.com/data/M08ruV16/icon.png",
+        "description": "Allows for render distances greater than the server's view-distance",
+        "enabled": false
+      },
+      {
+        "id": "chat_heads",
+        "name": "Chat Heads",
+        "file": "chat_heads-0.13.20-neoforge-1.21.jar",
+        "image": "https://cdn.modrinth.com/data/Wb5oqrBJ/icon.png",
+        "description": "See who you're chatting with!",
+        "enabled": false
+      },
+      {
+        "id": "continuity",
+        "name": "Continuity",
+        "file": "continuity-3.0.0+1.21.neoforge.jar",
+        "image": "https://cdn.modrinth.com/data/1IjD5062/icon.png",
+        "description": "A Minecraft mod that allows for efficient connected textures",
+        "enabled": false
+      },
+      {
+        "id": "craftingtweaks",
+        "name": "Crafting Tweaks",
+        "file": "craftingtweaks-neoforge-1.21.1-21.1.6.jar",
+        "image": "https://cdn.modrinth.com/data/DMu0oBKf/e0ba8860a4352911234e3c8f6e5118ba652f5fc8_96.webp",
+        "description": "Allows you to rotate, balance or clear the crafting matrix by the press of a button, in any (supported) crafting window.",
+        "enabled": false
+      },
+      {
+        "id": "CutThrough",
+        "name": "Cut Through",
+        "file": "CutThrough-v21.1.0-1.21.1-NeoForge.jar",
+        "image": "https://cdn.modrinth.com/data/Dk6su9JN/48d63d2a8c23d95219a44e7a7fd8808c53c71ebc_96.webp",
+        "description": "Cleanly swing through transparent blocks like tall grass to hit mobs without breaking said block.",
+        "enabled": false
+      },
+      {
+        "id": "distraction_free_recipes",
+        "name": "Distraction Free Recipes (EMI / REI / JEI)",
+        "file": "distraction_free_recipes-neoforge-1.2.1-1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/gbJLUhZP/2f17d94bd8f7b58897a2502adee7742c4dc24d50_96.webp",
+        "description": "Automatically hides the recipe viewer when not searching.",
+        "enabled": false
+      },
+      {
+        "id": "do_a_barrel_roll",
+        "name": "Do a Barrel Roll",
+        "file": "do_a_barrel_roll-neoforge-3.7.3+1.21.jar",
+        "image": "https://cdn.modrinth.com/data/6FtRfnLg/adc87c81f55b75a07d29349452c1c8da0ad925a4_96.webp",
+        "description": "Microsoft flight simulator for Minecraft elytras.",
+        "enabled": false
+      },
+      {
+        "id": "dynamiccrosshair",
+        "name": "Dynamic Crosshair",
+        "file": "dynamiccrosshair-9.8+1.21.1-neoforge.jar",
+        "image": "https://cdn.modrinth.com/data/ZcR9weSm/8da8af58ca961f937bd05d41dcefa26be7b5c182.png",
+        "description": "A mod that hides or changes the crosshair dependent on context",
+        "enabled": false
+      },
+      {
+        "id": "dynamic-fps",
+        "name": "Dynamic FPS",
+        "file": "dynamic-fps-3.9.5+minecraft-1.21.0-neoforge.jar",
+        "image": "https://cdn.modrinth.com/data/LQ3K71Q1/5056368d0d87c1a9f3efead0cb48ab39a4ea87bf_96.webp",
+        "description": "Reduce resource usage while Minecraft is in the background, idle, or on battery.",
+        "enabled": false
+      },
+      {
+        "id": "dynamicsurroundings",
+        "name": "Dynamic Surroundings",
+        "file": "dynamicsurroundings-neoforge-1.21.1-0.4.2.jar",
+        "image": "https://cdn.modrinth.com/data/4TSI7dRt/32645cba83aa040ff7d803ae97f7709251abaeb0_96.webp",
+        "description": "Minecraft experience by weaving a tapestry of sound and visual effects",
+        "enabled": true
+      },
+      {
+        "id": "emoji-type",
+        "name": "Emoji Type",
+        "file": "emoji-type-2.3.0-1.21.3-neoforge.jar",
+        "image": "https://cdn.modrinth.com/data/q7vRRpxU/bc891926268337f66bc7269e536c054a410e9a78.webp",
+        "description": "Allows you to easily type emoji and emoticons in game.",
+        "enabled": false
+      },
+      {
+        "id": "enchdesc-neoforge",
+        "name": "Enchantment Descriptions",
+        "file": "enchdesc-neoforge-1.21.1-21.1.7.jar",
+        "image": "https://cdn.modrinth.com/data/UVtY3ZAC/1f857baf3d1f78e40343925176c084838c91a891_96.webp",
+        "description": "Provides a way to get enchantment descriptions from enchanted books.",
+        "enabled": false
+      },
+      {
+        "id": "entityculling",
+        "name": "Entity Culling",
+        "file": "entityculling-neoforge-1.8.2-mc1.21.jar",
+        "image": "https://cdn.modrinth.com/data/NNAgCjsB/7873452d6cede4daed12da3d7d8c193ab88b4fd6_96.webp",
+        "description": "Using async path-tracing to hide Block-/Entities that are not visible",
+        "enabled": true
+      },
+      {
+        "id": "EquipmentCompare",
+        "name": "Equipment Compare",
+        "file": "EquipmentCompare-1.21.1-neoforge-1.3.13.jar",
+        "image": "https://cdn.modrinth.com/data/CYSUVOdj/1cadab9c3d8eacc48ec422b7a08e12c144700a2f_96.webp",
+        "description": "Makes it easier to compare equipment by showing a tooltip for what you're already wearing.",
+        "enabled": false
+      },
+      {
+        "id": "EuphoriaPatcher",
+        "name": "Euphoria Patches",
+        "file": "EuphoriaPatcher-1.6.5-r5.5.1-neoforge.jar",
+        "image": "https://cdn.modrinth.com/data/4H6sumDB/437130f3f10997f720ff0b788cb24cde3b3b8541.png",
+        "description": "Euphoria Patches is an add-on for Complementary Shaders, extending it with more optional features and settings.",
+        "enabled": false
+      },
+      {
+        "id": "explosiveenhancement",
+        "name": "Explosive Enhancement: Reforged",
+        "file": "explosiveenhancement-neoforge-1.21.1-1.1.2.jar",
+        "image": "https://cdn.modrinth.com/data/OSQ8mw2r/88f44e9ed022061b1eb865996b2f98fe01937de6.png",
+        "description": "Makes the explosion animation look cooler.",
+        "enabled": false
+      },
+      {
+        "id": "FancyBlockParticles",
+        "name": "Fancy Block Particles - Renewed",
+        "file": "FancyBlockParticles-1.21.1-neoforge-21.1.4.1.jar",
+        "image": "https://cdn.modrinth.com/data/S2guHrs2/9d9ac529549ddd2664e842893319d1e954b21395_96.webp",
+        "description": "3D Digging Particles",
+        "enabled": false
+      },
+      {
+        "id": "fast-ip-ping",
+        "name": "Fast IP Ping",
+        "file": "fast-ip-ping-v1.0.7-mc1.21.1-neoforge.jar",
+        "image": "https://cdn.modrinth.com/data/9mtu0sUO/dca186a8a57d45ad06e88de6cfc45d4cc4c6a0ba.png",
+        "description": "Yeet the laggy reversed DNS lookup for literal IP server addresses",
+        "enabled": true
+      },
+      {
+        "id": "Flashback",
+        "name": "Flashback",
+        "file": "Flashback-0.36.0-for-MC1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/4das1Fjq/e81c66aacf2e12c09a95e4f971ea5e2b9f608317_96.webp",
+        "description": "Record your Minecraft gameplay, play it back and create stunning cinematic shots",
+        "enabled": false
+      },
+      {
+        "id": "Forgematica",
+        "name": "Forgematica",
+        "file": "Forgematica-0.3.3-mc1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/dCKRaeBC/06d4e5a628094cfd307e0cdc0eba4fb007d7987f_96.webp",
+        "description": "Litematica unofficial (Neo)Forge port. A modern client-side schematic mod for Minecraft.",
+        "enabled": false
+      },
+      {
+        "id": "ImmersiveUI",
+        "name": "Immersive UI",
+        "file": "ImmersiveUI-NEOFORGE-0.3.3+1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/9wv7LuMc/fac59d2847d87e6b5cb384c302d6c2bcfd0d0c4b_96.webp",
+        "description": "Enhance your gameplay experience with animated UI components",
+        "enabled": false
+      },
+      {
+        "id": "Highlighter",
+        "name": "Item Highlighter",
+        "file": "Highlighter-1.21-neoforge-1.1.11.jar",
+        "image": "https://cdn.modrinth.com/data/cVNW5lr6/5e15f8c53ea36ca5391cdd9bbdea33261fa4c18d_96.webp",
+        "description": "Highlights newly picked-up items. Simple and convenient.",
+        "enabled": false
+      },
+      {
+        "id": "ItemPhysicLite_NEOFORGE_v1",
+        "name": "ItemPhysic Lite",
+        "file": "ItemPhysicLite_NEOFORGE_v1.6.8_mc1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/OuyCgP8t/0b6af647b8bd2f5b7230b86566311692273f3360_96.webp",
+        "description": "items fall to the ground and do not float",
+        "enabled": false
+      },
+      {
+        "id": "journeymap",
+        "name": "JourneyMap",
+        "file": "journeymap-neoforge-1.21.1-6.0.0-beta.52.jar",
+        "image": "https://cdn.modrinth.com/data/lfHFW1mp/a1c571a21a88f6fa59eab67829f216f65ab393ee_96.webp",
+        "description": "Real-time mapping in game or in a web browser as you explore.",
+        "enabled": false
+      },
+      {
+        "id": "LegendaryTooltips",
+        "name": "Legendary Tooltips",
+        "file": "LegendaryTooltips-1.21.1-neoforge-1.5.5.jar",
+        "image": "https://cdn.modrinth.com/data/atHH8NyV/bd47257c8d4aca0e04c43269e5beb7af680b144b_96.webp",
+        "description": "Give your rare items a fancier tooltip! Also adds additional tooltip configuration options.",
+        "enabled": false
+      },
+      {
+        "id": "languagereload",
+        "name": "LanguageReloadUnofficial",
+        "file": "languagereload-neoforge-1.21.1-1.0.2.jar",
+        "image": "https://cdn.modrinth.com/data/4zpN0syd/c2fb93358a1e67ca4b1183f19b2b54debcdccbfb_96.webp",
+        "description": "Reduces load times and adds fallbacks for languages",
+        "enabled": false
+      },
+      {
+        "id": "LongerChatHistory",
+        "name": "Longer Chat History",
+        "file": "LongerChatHistory-neoforge-1.7.jar",
+        "image": "https://cdn.modrinth.com/data/f4P7fNKN/3d192c8ccd5d568aa02234c647263485860077ec.png",
+        "description": "Increases the maximum length of chat history.",
+        "enabled": false
+      },
+      {
+        "id": "modernfix",
+        "name": "ModernFix",
+        "file": "modernfix-neoforge-5.24.3+mc1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/nmDcB62a/2af94de5e08ae54567ee86b968fc7ce076d9fee5_96.webp",
+        "description": "All-in-one mod that improves performance, reduces memory usage, and fixes many bugs. Compatible with all your favorite performance mods!",
+        "enabled": true
+      },
+      {
+        "id": "moreculling",
+        "name": "More Culling",
+        "file": "moreculling-neoforge-1.21.1-1.0.6.jar",
+        "image": "https://cdn.modrinth.com/data/51shyZVL/c51b07193b56e952269ef50101d12aecba2b4747_96.webp",
+        "description": "A mod that changes how multiple types of culling are handled in order to improve performance",
+        "enabled": true
+      },
+      {
+        "id": "MouseTweaks",
+        "name": "Mouse Tweaks",
+        "file": "MouseTweaks-neoforge-mc1.21-2.26.1.jar",
+        "image": "https://cdn.modrinth.com/data/aC3cM3Vq/6c0eaa4e60a9c87f4766f222ff63286f09da32c0_96.webp",
+        "description": "Enhances inventory management by adding various functions to the mouse buttons.",
+        "enabled": true
+      },
+      {
+        "id": "offline-tab-head",
+        "name": "Offline Tab Head",
+        "file": "offline-tab-head-1.0.0.jar",
+        "image": "https://cdn.modrinth.com/data/Yl4pEGbo/d62f2486e6e301b560d362de09d606f317b691dc.png",
+        "description": "Enable heads in TAB on offline servers.",
+        "enabled": false
+      },
+      {
+        "id": "ok_zoomer",
+        "name": "Ok Zoomer",
+        "file": "ok_zoomer-neo-10.0.0-beta.10.jar",
+        "image": "https://cdn.modrinth.com/data/aXf2OSFU/6bb42db9ff3dba778257ccc33452c338a7690aba_96.webp",
+        "description": "Ok Zoomer is a zoom mod that is powerful, lean, and pretty customizable. The zoom is yours!",
+        "enabled": false
+      },
+      {
+        "id": "particular",
+        "name": "Particular ✨ Reforged",
+        "file": "particular-1.21.1-NeoForge-1.1.4.jar",
+        "image": "https://cdn.modrinth.com/data/B1CcCd9h/1764f9ce329d9e87a6e043d0f3eb68bb1855c0cf_96.webp",
+        "description": "Enhances Minecraft's ambience with hand-crafted visual effects like fireflies, falling leaves, and waterfall cascades",
+        "enabled": false
+      },
+      {
+        "id": "PresenceFootsteps",
+        "name": "Presence Footsteps",
+        "file": "PresenceFootsteps-1.11.0+1.21.jar",
+        "image": "https://cdn.modrinth.com/data/rcTfTZr3/c08dc581f0bf3b729f86e962fa800463af86e9a2_96.webp",
+        "description": "An Overly complicated Sound Mod",
+        "enabled": false
+      },
+      {
+        "id": "ScalableLux",
+        "name": "ScalableLux",
+        "file": "ScalableLux-0.1.0+beta.2+neoforge.1a07a27-all.jar",
+        "image": "https://cdn.modrinth.com/data/Ps1zyz6x/27133942a1a58af1bb11b087957ea4cc14414dd3_96.webp",
+        "description": "mod based on Starlight that improves the performance of light updates in Minecraft.",
+        "enabled": false
+      },
+      {
+        "id": "seasonhud",
+        "name": "SeasonHUD",
+        "file": "seasonhud-neoforge-1.21.1-1.13.8.jar",
+        "image": "https://cdn.modrinth.com/data/VNjUn3NA/81209cfea1af389a4f7ff428147f94f177de73c7_96.webp",
+        "description": "This is an addon for SereneSeasons that displays the current season on the HUD or under the minimap.",
+        "enabled": false
+      },
+      {
+        "id": "shulkerboxtooltip",
+        "name": "Shulker Box Tooltip",
+        "file": "shulkerboxtooltip-neoforge-5.1.6+1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/2M01OLQq/bb490716cf2590cf84100a495931c3d4743bce43_96.webp",
+        "description": "View the contents of shulker boxes from your inventory",
+        "enabled": false
+      },
+      {
+        "id": "sodiumdynamiclights",
+        "name": "Sodium Dynamic Lights",
+        "file": "sodiumdynamiclights-neoforge-1.0.10-1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/PxQSWIcD/a5ab5515213391934e18baaf487c87e4b24ebfa3_96.webp",
+        "description": "Multiloader port of LambDynLights that adds Sodium options integration",
+        "dependsOn": ["sodium", "sodiumoptionsapi"],
+        "enabled": false
+      },
+      {
+        "id": "sodiumoptionsmodcompat",
+        "name": "Sodium Options Mod Compat",
+        "file": "sodiumoptionsmodcompat-neoforge-1.0.0-1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/Yg1VT27P/ca677a47214e6428dca89dbfc80efa49e14de0b6_96.webp",
+        "description": "Adds compatibility for various mods through Sodium Options API",
+        "dependsOn": ["sodium", "sodiumoptionsapi"],
+        "enabled": false
+      },
+      {
+        "id": "sodiumoptionsapi",
+        "name": "Sodium Options API",
+        "file": "sodiumoptionsapi-neoforge-1.0.10-1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/Es5v4eyq/7bff17babb498584c0edd74211d97435b651c11f_96.webp",
+        "description": "Config API for adding Sodium options with a better categories menu",
+        "dependsOn": ["sodium"],
+        "enabled": false
+      },
+      {
+        "id": "sodiumleafculling",
+        "name": "Sodium Leaf Culling",
+        "file": "sodiumleafculling-neoforge-1.0.1-1.21.1.jar",
+        "image": "https://cdn.modrinth.com/data/M25bkObt/b624afe158f3f4cd8e82d280b4f6de344d824186_96.webp",
+        "description": "Smart leaf culling algorithm for Sodium",
+        "dependsOn": ["sodium"],
+        "enabled": false
+      },
+      {
+        "id": "sodium-shadowy-path-blocks",
+        "name": "Sodium Shadowy Path Blocks",
+        "file": "sodium-shadowy-path-blocks-neoforge-4.0.0.jar",
+        "image": "https://cdn.modrinth.com/data/EIa1eiMm/7ea3bc26470ba1f45b1c980d5058b033a752396b_96.webp",
+        "description": "Reintroduces vanilla-like smooth lighting to non-full blocks (e.g. dirt paths and how they have dark shading when directly next to a full block) when using Sodium.",
+        "dependsOn": ["sodium"],
+        "enabled": false
+      },
+      {
+        "id": "sounds",
+        "name": "Sounds",
+        "file": "sounds-2.4.13.1+lts+1.21.1+neoforge.jar",
+        "image": "https://cdn.modrinth.com/data/ZouiUX7t/b6ae84ea14654245f58856722473afeddf72360c_96.webp",
+        "description": "It's what it says on the tin. A complete upgrade to Minecraft's SFX with over 170 new sound effects for UIs, items, blocks and more.",
+        "dependsOn": ["sodium"],
+        "enabled": false
+      },
+      {
+        "id": "sound-physics-remastered",
+        "name": "Sound Physics Remastered",
+        "file": "sound-physics-remastered-neoforge-1.21.1-1.4.15.jar",
+        "image": "https://cdn.modrinth.com/data/qyVF9oeo/798fbfae58ec95ad51f3e1d522b43227306c326c.png",
+        "description": "A Minecraft mod that provides realistic sound attenuation, reverberation, and absorption through blocks.",
+        "enabled": false
+      },
+      {
+        "id": "SubtleEffects",
+        "name": "Subtle Effects",
+        "file": "SubtleEffects-neoforge-1.21.1-1.12.1.jar",
+        "image": "https://cdn.modrinth.com/data/4q8UOK1d/8a5d3febe9a9badba435a3f66a49668d04ada01f_96.webp",
+        "description": "Adding many new subtle details through particles and a few sounds",
+        "enabled": false
+      },
+      {
+        "id": "supplemental_patches",
+        "name": "Supplemental Patches",
+        "file": "supplemental_patches-0.4.1-beta.jar",
+        "image": "https://cdn.modrinth.com/data/7G5M8xtj/9b62691e52985276760af61b6c275ef03d9eaa88_96.webp",
+        "description": "Supplemental Patches enables users to create custom shaders for modded blocks, entities, items, particles, etc, through a resource-pack, with the shaders being patched onto Euphoria Patches.",
+        "enabled": false
+      },
+      {
+        "id": "visuality",
+        "name": "Visuality: Reforged",
+        "file": "visuality-forge-2.0.5.jar",
+        "image": "https://cdn.modrinth.com/data/z13R7Et1/15c18a26826388d2f5da4fd7bbfdfa1c41575360.png",
+        "description": "Little visual improvements by adding a bunch of new particles.",
+        "enabled": false
+      }
+
+    ]
+}

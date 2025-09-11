@@ -1,132 +1,67 @@
-import { RootState } from '@/store/configureStore'
-import { Mod, Preset, removeFromMissingMods, setModEnabled } from '@/store/slice/modsSlice'
-import { invoke } from '@tauri-apps/api/core'
-import { Props } from 'next/script'
-import React, { useCallback, useMemo, useState } from 'react'
-import { shallowEqual, useDispatch, useSelector } from 'react-redux'
-import { toast } from 'sonner'
-import { Button } from '../ui/button'
-import { CloudDownload, LoaderCircle } from 'lucide-react'
-import { Progress } from '../ui/progress'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { SERVER_ENDPOINTS } from '@/lib/config'
+// components/mods/BulkModDownloader.tsx
+'use client';
+
+import React, { useCallback, useMemo, useState } from 'react';
+import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { Button } from '../ui/button';
+import { CloudDownload, LoaderCircle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { toast } from 'sonner';
+import { RootState } from '@/store/configureStore';
+import { Mod, removeFromMissingMods, setModEnabled } from '@/store/slice/modsSlice';
+import { useModsAudit } from '@/hooks/useModsAudit';
 
 const BulkModDownloader = ({ modsPath }: { modsPath: string }) => {
-  const dispatch = useDispatch()
-  const mods = useSelector((s: RootState) => s.modsSlice.mods, shallowEqual)
-  const missingMods = useSelector((s: RootState) => s.modsSlice.missingMods, shallowEqual)
-  const { presets, activePresetId } = useSelector((s: RootState) => s.modsSlice, shallowEqual)
-  const userLogin = useSelector((s: RootState) => s.authSlice.userLogin)
-  const userPassword = useSelector((s: RootState) => s.authSlice.userPassword)
+  const dispatch = useDispatch();
+  const mods = useSelector((s: RootState) => s.modsSlice.mods, shallowEqual);
+  const missingMods = useSelector((s: RootState) => s.modsSlice.missingMods, shallowEqual);
+  const { presets, activePresetId } = useSelector((s: RootState) => s.modsSlice, shallowEqual);
 
-  const [loading, setLoading] = useState(false)
+  const { downloadSelected, runAudit } = useModsAudit();
+  const [loading, setLoading] = useState(false);
 
-const activeEndPoint = useSelector((s: RootState) => s.settingsState.activeEndPoint)
-const downloadUrl = useMemo(() => {
-    // fallback
-    let base = String(activeEndPoint ?? SERVER_ENDPOINTS.main)
-
-    // ensure scheme present
-    if (!/^https?:\/\//i.test(base)) base = `http://${base}`
-
-    // remove trailing slashes
-    base = base.replace(/\/+$/, '')
-
-    return `${base}/download/mod`
-}, [activeEndPoint])
-
-  // Compute missing mods relevant for the active preset.
   const targetMissingMods = useMemo<Mod[]>(() => {
-    const preset = presets.find((p) => p.id === activePresetId)
-    if (!preset) return missingMods
-    if (preset.mods === 'all') return missingMods
-    const allowed = new Set<string>(preset.mods as string[])
-    return missingMods.filter((m) => allowed.has(m.id))
-  }, [presets, activePresetId, missingMods])
+    const preset = presets.find((p) => p.id === activePresetId);
+    if (!preset) return missingMods;
+    if (preset.mods === 'all') return missingMods;
+    const allowed = new Set<string>(preset.mods as string[]);
+    const result: Mod[] = [];
+    for (const m of missingMods) {
+      if (allowed.has(m.id)) result.push(m);
+    }
+    return result;
+  }, [presets, activePresetId, missingMods]);
 
-  if (!loading && targetMissingMods.length === 0) return null
-
-  // Build parent-first ordered list for a start mod.
-  const collectMissingDepsOrdered = useCallback(
-    (start: Mod, allMods: Mod[], missingSet: Set<string>, result: Mod[], visited: Set<string>) => {
-      // depth-first recursive visit. parents processed before child.
-      const visit = (m: Mod) => {
-        if (visited.has(m.id)) return
-        visited.add(m.id)
-        const deps = m.dependsOn ?? []
-        for (const depId of deps) {
-          if (!missingSet.has(depId)) continue
-          const parent = allMods.find((x) => x.id === depId)
-          if (parent) visit(parent)
-        }
-        result.push(m) // push after parents => parent-first order
-      }
-      visit(start)
-    },
-    []
-  )
-
-  const downloadAll = useCallback(async () => {
+  const handleDownloadAll = useCallback(async () => {
     if (targetMissingMods.length === 0) {
-      toast('Нет отсутствующих модов для текущего пресета')
-      return
+      toast('Нет отсутствующих модов для текущего пресета');
+      return;
     }
 
-    setLoading(true)
-
+    setLoading(true);
     try {
-      const missingIds = new Set<string>(missingMods.map((m) => m.id))
-      const ordered: Mod[] = []
-      const globalVisited = new Set<string>()
+      await runAudit(modsPath);
 
-      // collect ordered list for each target missing mod
-      for (const mm of targetMissingMods) {
-        collectMissingDepsOrdered(mm, mods, missingIds, ordered, globalVisited)
-      }
+      const files: string[] = [];
+      for (const m of targetMissingMods) files.push(m.file);
 
-      // dedupe preserving order
-      const seen = new Set<string>()
-      const toDownload: Mod[] = []
-      for (const m of ordered) {
-        if (!seen.has(m.id)) {
-          seen.add(m.id)
-          toDownload.push(m)
+      const { missingOnServer } = await downloadSelected(files);
+      const missingSet = new Set<string>(missingOnServer);
+
+      for (const m of targetMissingMods) {
+        if (!missingSet.has(m.file)) {
+          dispatch(removeFromMissingMods(m));
+          dispatch(setModEnabled({ id: m.id, enabled: true }));
         }
       }
-
-      // sequential download; on error skip and continue
-      for (const mod of toDownload) {
-        try {
-          await invoke('download_mod_file', {
-            url: downloadUrl,
-            path: modsPath,
-            modName: mod.file,
-            username: userLogin,
-            password: userPassword,
-          })
-
-          // await invoke('skip_worktree', {
-          //   args: {
-          //     base_dir: modsPath,
-          //     files: [mod.file],
-          //   },
-          // })
-
-          dispatch(removeFromMissingMods(mod))
-          dispatch(setModEnabled({ id: mod.id, enabled: true }))
-        } catch (e) {
-          // log and continue to next mod
-          console.error(`Failed to download ${mod.file}`, e)
-          toast.error(`Не удалось загрузить мод ${mod.name}`, { description: String(e) })
-          // intentionally do not rethrow
-        }
-      }
+    } catch (e) {
+      toast.error('Не удалось загрузить моды', { description: String(e) });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }, [collectMissingDepsOrdered, modsPath, mods, missingMods, targetMissingMods, userLogin, userPassword, dispatch])
+  }, [modsPath, targetMissingMods, runAudit, downloadSelected, dispatch]);
 
-  const disabled = loading || targetMissingMods.length === 0
+  if (!loading && targetMissingMods.length === 0) return null;
 
   return (
     <div className="flex items-center gap-2">
@@ -135,8 +70,8 @@ const downloadUrl = useMemo(() => {
           <Button
             size="icon"
             variant="outline"
-            onClick={downloadAll}
-            disabled={disabled}
+            onClick={handleDownloadAll}
+            disabled={loading}
             aria-label="Download missing mods for active preset"
             className="inline-flex items-center p-2 rounded-full"
           >
@@ -148,7 +83,7 @@ const downloadUrl = useMemo(() => {
         </TooltipContent>
       </Tooltip>
     </div>
-  )
-}
+  );
+};
 
-export default React.memo(BulkModDownloader)
+export default React.memo(BulkModDownloader);

@@ -23,7 +23,7 @@ serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
 tauri = { version = "2.6.2", features = [] }
 tauri-plugin-log = "2"
-tokio = { version = "1.38", features = ["macros", "process", "io-util"] }
+tokio = { version = "1.38", features = ["process", "macros", "rt-multi-thread", "macros", "fs", "io-util"] }
 tauri-plugin-dialog = "2"
 tokio-stream = "0.1.17"
 dotenvy = "0.15.7"
@@ -36,6 +36,10 @@ reqwest = "0.12.23"
 zip = "4.6.1"
 ignore = "0.4.23"
 globset = "0.4.16"
+walkdir = "2.5.0"
+sha2 = "0.10.9"
+rayon = "1.10.0"
+num_cpus = "1.17.0"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"

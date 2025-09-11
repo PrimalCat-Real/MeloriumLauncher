@@ -1,120 +1,80 @@
-'use client'
-import axios from 'axios'
-import React, { useCallback, useMemo, useState } from 'react'
-import { toast } from 'sonner'
-import { Button } from '../ui/button'
-import { Mod, removeFromMissingMods, setModEnabled } from '@/store/slice/modsSlice'
-import { Download, LoaderCircle } from 'lucide-react'
-import { Progress } from '../ui/progress'
-import { useDispatch, useSelector } from 'react-redux'
-import { invoke } from '@tauri-apps/api/core'
-import { RootState } from '@/store/configureStore'
-import { getParents } from '@/lib/utils'
-import { SERVER_ENDPOINTS } from '@/lib/config'
+// components/mods/ModDownloader.tsx
+'use client';
+
+import React, { useCallback, useMemo, useState } from 'react';
+import { useDispatch, useSelector, shallowEqual } from 'react-redux';
+import { Button } from '../ui/button';
+import { Download, LoaderCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { RootState } from '@/store/configureStore';
+import { getParents } from '@/lib/utils';
+import { Mod, removeFromMissingMods, setModEnabled } from '@/store/slice/modsSlice';
+import { useModsAudit } from '@/hooks/useModsAudit';
 
 interface ModDownloaderProps {
-  mod: Mod
-  modsPath: string
+  mod: Mod;
+  modsPath: string;
 }
 
-
 const ModDownloader = ({ mod, modsPath }: ModDownloaderProps) => {
-  const activeEndPoint = useSelector(
-    (s: RootState) => s.settingsState.activeEndPoint
-  )
-  const downloadUrl = useMemo(() => {
-    // fallback
-    let base = String(activeEndPoint ?? SERVER_ENDPOINTS.main)
-
-    // ensure scheme present
-    if (!/^https?:\/\//i.test(base)) base = `http://${base}`
-
-    // remove trailing slashes
-    base = base.replace(/\/+$/, '')
-
-    return `${base}/download/mod`
-  }, [activeEndPoint])
-  const dispatch = useDispatch()
-  const [downloading, setDownloading] = useState(false)
-
-  const mods = useSelector((state: RootState) => state.modsSlice.mods)
-  const userLogin = useSelector((state: RootState) => state.authSlice.userLogin)
-  const userPassword = useSelector((state: RootState) => state.authSlice.userPassword)
+  const dispatch = useDispatch();
+  const mods = useSelector((s: RootState) => s.modsSlice.mods, shallowEqual);
+  const [downloading, setDownloading] = useState(false);
+  const { downloadSelected, runAudit } = useModsAudit();
 
   const collectWithDependencies = useCallback(
-    (target: Mod, allMods: Mod[], acc: Mod[] = []): Mod[] => {
-      if (acc.find((m) => m.id === target.id)) return acc
-      acc.push(target)
-
-      const parents = getParents(target.id, allMods)
-      parents.forEach((parentId) => {
-        const parent = allMods.find((m) => m.id === parentId)
-        if (parent) {
-          collectWithDependencies(parent, allMods, acc)
-        }
-      })
-
-      return acc
+    (target: Mod, allMods: Mod[], acc: Mod[] = []) => {
+      if (acc.find((m) => m.id === target.id)) return acc;
+      acc.push(target);
+      const parents = getParents(target.id, allMods);
+      for (const parentId of parents) {
+        const parent = allMods.find((m) => m.id === parentId);
+        if (parent) collectWithDependencies(parent, allMods, acc);
+      }
+      return acc;
     },
     []
-  )
+  );
 
-  const downloadMod = useCallback(
-    async (targetMod: Mod) => {
-      setDownloading(true)
+  const handleDownload = useCallback(async () => {
+    setDownloading(true);
+    try {
+      // ensure audit has modsDir for later downloads
+      await runAudit(modsPath);
 
-      try {
-        const modsToDownload = collectWithDependencies(targetMod, mods)
+      const toFetch = collectWithDependencies(mod, mods);
+      const files: string[] = [];
+      for (const m of toFetch) files.push(m.file);
 
-        for (const m of modsToDownload) {
-          try {
-            await invoke('download_mod_file', {
-              url: downloadUrl,
-              path: modsPath,
-              modName: m.file,
-              username: userLogin,
-              password: userPassword,
-            })
+      const { missingOnServer } = await downloadSelected(files);
 
-            // await invoke('skip_worktree', {
-            //   args: {
-            //     base_dir: modsPath,
-            //     files: [m.file],
-            //   },
-            // })
-
-            console.log(`Мод ${m.file} был успешно загружен`)
-            dispatch(removeFromMissingMods(m))
-            dispatch(setModEnabled({ id: m.id, enabled: true }))
-          } catch (e) {
-            console.error(`Ошибка загрузки ${m.file}:`, e)
-            toast.error(`Не удалось загрузить мод ${m.name}`, {
-              description: String(e),
-            })
-          }
+      // update store for succeeded ones
+      const missingSet = new Set<string>(missingOnServer);
+      for (const m of toFetch) {
+        if (!missingSet.has(m.file)) {
+          dispatch(removeFromMissingMods(m));
+          dispatch(setModEnabled({ id: m.id, enabled: true }));
         }
-      } finally {
-        setDownloading(false)
       }
-    },
-    [mods, modsPath]
-  )
+    } catch (e) {
+      toast.error('Не удалось загрузить мод(ы)', { description: String(e) });
+    } finally {
+      setDownloading(false);
+    }
+  }, [mod, mods, modsPath, runAudit, downloadSelected, dispatch]);
 
   return (
     <Button
-      size={'none'}
-      className='inline-flex px-2 py-4'
-      variant={'outline'}
+      size="none"
+      className="inline-flex px-2 py-4"
+      variant="outline"
       disabled={downloading}
-      onClick={() => downloadMod(mod)}
+      onClick={handleDownload}
+      aria-label="Download selected mod with dependencies"
     >
-      {downloading ? (
-        <LoaderCircle className='animate-spin text-secondary' />
-      ) : (
-        <Download />
-      )}
+      {downloading ? <LoaderCircle className="animate-spin text-secondary" /> : <Download />}
     </Button>
-  )
-}
+  );
+};
 
-export default React.memo(ModDownloader)  
+export default React.memo(ModDownloader);

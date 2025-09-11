@@ -5,11 +5,12 @@ import { RootState } from '@/store/configureStore';
 import React, { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux';
 import { Button } from '../ui/button';
-import { resolveResource } from '@tauri-apps/api/path';
+import { join, resolveResource } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { LoaderCircle } from 'lucide-react';
 import { getPublicIp, whitelistIp } from '@/lib/utils';
+import { useModsAudit } from '@/hooks/useModsAudit';
 
 interface LauncStatus {
   status: "verify" | "idle" | "launching", 
@@ -20,6 +21,7 @@ const LaunchButton = () => {
     const dispatch = useDispatch();
     const { activeEndPoint } = useSelector((s: RootState) => s.settingsState);
 
+    const { runAudit, deleteExtras, downloadPlanned } = useModsAudit();
     const [launchStatus, setLaunchStatus]  = useState<LauncStatus>({status: "idle"})
     const { userLogin, userUuid, userPassword } = useSelector(
       (state: RootState) => state.authSlice
@@ -69,10 +71,15 @@ const LaunchButton = () => {
               })()
             );
           }
+
+          const modsDir = await join(gameDir, 'Melorium','mods');
+          await runAudit(modsDir);
+          await deleteExtras();
+          await downloadPlanned();
           setLaunchStatus({status: "launching"})
           // setLaunching(true)
 
-          await useMinecraftLaunch(gameParams);
+          // await useMinecraftLaunch(gameParams);
         } catch (err) {
           toast.error("Не удалось проверить файлы", {
             description: String(err),
