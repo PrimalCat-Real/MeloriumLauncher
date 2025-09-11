@@ -21,7 +21,7 @@ const LaunchButton = () => {
     const dispatch = useDispatch();
     const { activeEndPoint } = useSelector((s: RootState) => s.settingsState);
 
-    const { runAudit, deleteExtras, downloadPlanned } = useModsAudit();
+    const { runAudit, deleteExtras, downloadSelected } = useModsAudit();
     const [launchStatus, setLaunchStatus]  = useState<LauncStatus>({status: "idle"})
     const { userLogin, userUuid, userPassword } = useSelector(
       (state: RootState) => state.authSlice
@@ -72,10 +72,16 @@ const LaunchButton = () => {
             );
           }
 
-          const modsDir = await join(gameDir, 'Melorium','mods');
-          await runAudit(modsDir);
+          const modsDir = await join(gameDir, 'Melorium', 'mods');
+          const audit = await runAudit(modsDir);              // ← получаем фактические списки
           await deleteExtras();
-          await downloadPlanned();
+          const wanted = [...audit.toDownload, ...audit.mismatched];
+
+          console.log('[launch] wanted total:', wanted.length);
+          if (wanted.length > 0) {
+            const { downloadedCount, missingOnServer } = await downloadSelected(wanted);
+            console.log('[launch] downloadedCount:', downloadedCount, 'missing:', missingOnServer);
+          }
           setLaunchStatus({status: "launching"})
           // setLaunching(true)
 
