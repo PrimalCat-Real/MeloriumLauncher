@@ -7,7 +7,6 @@ import { Skeleton } from '../ui/skeleton'
 import { UsersRound } from 'lucide-react'
 import { AnimatedShinyText } from '../magicui/animated-shiny-text'
 
-
 type StatusPayload = {
   status: 'online' | 'offline'
   players: { online: number; max: number }
@@ -15,58 +14,62 @@ type StatusPayload = {
 
 type RootState = { settingsState: { activeEndPoint: string } }
 
+const OFFLINE_FALLBACK: StatusPayload = {
+  status: 'offline',
+  players: { online: 0, max: 0 },
+}
+
+const buildUrl = (endpoint: string): string => {
+  // корректно склеивает без двойных слешей
+  return new URL('/get-server-status', endpoint).toString()
+}
+
 const fetchStatus = async (endpoint: string): Promise<StatusPayload> => {
-  const url = `${endpoint}/get-server-status`
-  const { data } = await axios.get<StatusPayload>(url, { timeout: 5000 })
-  return data
+  try {
+    const url = buildUrl(endpoint)
+    const { data } = await axios.get<StatusPayload>(url, { timeout: 5000 })
+    // валидация формы ответа
+    if (!data || typeof data.status !== 'string' || !data.players) return OFFLINE_FALLBACK
+    return data
+  } catch {
+    // не бросаем — отдаем оффлайн, UI не падает
+    return OFFLINE_FALLBACK
+  }
 }
 
 const suspenseify = <T,>(promise: Promise<T>) => {
-  let status: 'pending' | 'success' | 'error' = 'pending'
+  let status: 'pending' | 'success' = 'pending'
   let response: T
-  let error: unknown
 
-  const suspender = promise
-    .then((res) => {
-      status = 'success'
-      response = res
-    })
-    .catch((err) => {
-      status = 'error'
-      error = err
-    })
+  const suspender = promise.then((res) => {
+    status = 'success'
+    response = res
+  })
 
   const read = (): T => {
     if (status === 'pending') throw suspender
-    if (status === 'error') throw error
     return response!
   }
 
   return { read }
 }
 
-
 const PlayersCount = ({ resource }: { resource: { read: () => StatusPayload } }): JSX.Element => {
   const data = resource.read()
   const online = data.status === 'online' ? Number(data.players.online ?? 0) : 0
-  return <div className='flex gap-1 items-center px-4 py-1 border-[#E17EFF]/50 border w-min rounded-full text-sm secondary-bg-gradient text-nowrap'>
-        {/* <span className="text-[#E17EFF]">
-        
-      </span> */}
-      
-      {/* <AnimatedShinyText>{data.status === 'online' ? 'Онлайн' : 'Офлайн'} {online}</AnimatedShinyText>
-    <UsersRound className='h-4 text-[#E17EFF]' /> */}
-    <AnimatedShinyText className="inline-flex items-center justify-center px-2 py-0.5 transition ease-out text-sm  hover:duration-300 ">
+  return (
+    <div className='flex gap-1 items-center px-4 py-1 border-[#E17EFF]/50 border w-min rounded-full text-sm secondary-bg-gradient text-nowrap'>
+      <AnimatedShinyText className="inline-flex items-center justify-center px-2 py-0.5 transition ease-out text-sm hover:duration-300">
         <span>{data.status === 'online' ? 'Онлайн' : 'Офлайн'} {online}</span>
         <UsersRound className="ml-1 size-4 transition-transform duration-300 ease-in-out group-hover:translate-x-0.5" />
-    </AnimatedShinyText>
-  </div>
+      </AnimatedShinyText>
+    </div>
+  )
 }
 
 const OnlinePlayersDisplay = (): JSX.Element => {
   const endpoint = useSelector((state: RootState) => state.settingsState?.activeEndPoint)
 
-  console.log(endpoint)
   const resource = useMemo(() => {
     if (!endpoint) return null
     return suspenseify(fetchStatus(endpoint))
