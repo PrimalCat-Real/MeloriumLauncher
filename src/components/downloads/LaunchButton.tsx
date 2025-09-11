@@ -79,7 +79,7 @@ const LaunchButton = () => {
           setLaunchStatus({status: "launching"})
           // setLaunching(true)
 
-          // await useMinecraftLaunch(gameParams);
+          await useMinecraftLaunch(gameParams);
         } catch (err) {
           toast.error("Не удалось проверить файлы", {
             description: String(err),
