@@ -46,12 +46,12 @@ const LaunchButton = () => {
           setLaunchStatus({status: "verify"})
           const gitPath = await resolveResource("portable-git/bin/git.exe");
           const taskId = crypto.randomUUID();
-          // await invoke("reset_repo", {
-          //   args: {
-          //     git_path: gitPath,
-          //     repo_path: gameDir,
-          //   },
-          // });
+          await invoke("reset_repo", {
+            args: {
+              git_path: gitPath,
+              repo_path: gameDir,
+            },
+          });
 
           // await invoke("reset_repo_selective", {
           //   gitPath: gitPath,

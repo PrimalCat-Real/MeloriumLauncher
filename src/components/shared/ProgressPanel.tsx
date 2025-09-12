@@ -1,3 +1,4 @@
+// components/shared/ProgressPanel.tsx
 'use client';
 
 import React, { memo, useCallback, useMemo } from "react";
@@ -9,11 +10,11 @@ import { cn } from "@/lib/utils";
 
 type SetupProps = {
   selectedPath?: string;
-  onPickPath?: () => void; // делаем опциональным
+  onPickPath?: () => void;
   onStart: () => void;
   canStart: boolean;
   startLabel?: string;
-  hidePathPicker?: boolean; // новое свойство
+  hidePathPicker?: boolean;
 };
 
 type ProgressProps = {
@@ -23,27 +24,24 @@ type ProgressProps = {
   total?: string;
   speed?: string;
   eta?: string;
+  leftLabel?: string;
+  rightLabel?: string;
   canClose?: boolean;
   onClose?: () => void;
-  hideTransferStats?: boolean; // NEW: hide ETA/speed/amount grid
+  hideTransferStats?: boolean;
+  inlinePercent?: boolean;
+  hideRightSlot?: boolean;
+  showLeftPercent?: boolean; // NEW: render percent on left (default: true)
 };
 
 type Props =
-  | {
-      mode: "setup";
-      title: string;
-      setup: SetupProps;
-    }
-  | ({
-      mode: "progress";
-      title: string;
-    } & ProgressProps);
+  | { mode: "setup"; title: string; setup: SetupProps }
+  | ({ mode: "progress"; title: string } & ProgressProps);
 
 const ProgressPanel: React.FC<Props> = (props) => {
   const handlePickPath = useCallback(() => {
     if (props.mode === "setup" && props.setup.onPickPath) props.setup.onPickPath();
   }, [props]);
-
 
   const handleStart = useCallback(() => {
     if (props.mode === "setup") props.setup.onStart();
@@ -54,14 +52,13 @@ const ProgressPanel: React.FC<Props> = (props) => {
   }, [props]);
 
   const isUnpacking = useMemo(() => {
-    // Hide ETA/speed/downloaded during unpacking stage
     if (props.mode !== "progress") return false;
     return /распаков/i.test(props.stage);
   }, [props]);
 
   return (
     <div className="space-y-4">
-      <div className="text-md font-medium">{props.title}</div> 
+      <div className="text-md font-medium">{props.title}</div>
 
       {props.mode === "setup" ? (
         <div className="space-y-4">
@@ -87,7 +84,6 @@ const ProgressPanel: React.FC<Props> = (props) => {
             </div>
           )}
 
-
           <div className="flex">
             <Button className="w-full" onClick={handleStart} disabled={!props.setup.canStart}>
               {props.setup.startLabel || "Скачать"}
@@ -96,38 +92,36 @@ const ProgressPanel: React.FC<Props> = (props) => {
         </div>
       ) : (
         <div className="space-y-3">
-          {/* <div className="flex items-center justify-between text-sm">
-            <span>{props.stage}</span>
-            <span>{Math.floor(props.percent)}%</span>
-          </div> */}
           <Progress className="h-3 w-full" value={props.percent} max={100} />
 
           {!isUnpacking && !props.hideTransferStats && (
             <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
               <div className="flex gap-2 items-center">
-                
-                <div className="truncate outline-btn-text-gradient">ETA {props.eta || "--:--"}</div>
                 <div className="truncate outline-btn-text-gradient">
-                  {Math.floor(props.percent)}%
-                  {/* {props.downloaded && props.total ? (
-                    `${props.downloaded} / ${props.total}`
-                  ) : (
-                    <Skeleton className="h-4 w-28" />
-                  )} */}
+                  {props.leftLabel ? `${props.leftLabel} ` : "ETA "}
+                  {props.inlinePercent
+                    ? `${props.eta || "--"} • ${Math.floor(props.percent)}%`
+                    : (props.eta || "--")}
                 </div>
+                {props.showLeftPercent !== false && !props.inlinePercent && (
+                  <div className="truncate outline-btn-text-gradient">
+                    {Math.floor(props.percent)}%
+                  </div>
+                )}
               </div>
-              {!isUnpacking && (<div className="text-right outline-btn-text-gradient">
-                {props.speed ? props.speed : <Skeleton className="h-4 w-20 ml-auto" />}
-              </div>)}
+
+              {!isUnpacking && !props.hideRightSlot && (
+                <div className="text-right outline-btn-text-gradient">
+                  {props.rightLabel ? `${props.rightLabel} ` : ""}
+                  {typeof props.speed === "string"
+                    ? props.speed
+                    : <Skeleton className="h-4 w-20 ml-auto" />}
+                </div>
+              )}
 
               <div />
             </div>
           )}
-          {/* {props.canClose && (
-            <div className="flex justify-end">
-              <Button onClick={handleClose}>Закрыть</Button>
-            </div>
-          )} */}
         </div>
       )}
     </div>

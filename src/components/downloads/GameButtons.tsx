@@ -77,7 +77,7 @@ const GameButtons = () => {
                 dispatch(changeDownloadStatus('downloaded'));
             }
         } catch (error) {
-            dispatch(changeDownloadStatus('needFisrtInstall'));
+            // dispatch(changeDownloadStatus('needFisrtInstall'));
             console.log("Ошибка проверки версии:", String(error))
             // dispatch(changeDownloadStatus('downloaded'));
             // toast.error("Ошибка проверки версии:", {
@@ -128,7 +128,7 @@ const GameButtons = () => {
     return (
         <div>
             {status === 'needFisrtInstall' && <DownloadButton />}
-            {/* {status === 'needUpdate' && <UpdateButton />} */}
+            {status === 'needUpdate' && <UpdateButton />}
             {(status === 'downloaded' || status === 'needUpdate') && <LaunchButton/>}
         </div>
     )
