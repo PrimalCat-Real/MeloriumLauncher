@@ -19,59 +19,68 @@ pub struct GitPullArgs {
 
 #[tauri::command]
 pub async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> {
-    let mut reset_cmd = Command::new(&args.git_path);
-    reset_cmd
+    let branch_name = {
+       let output = tokio::process::Command::new(&args.git_path)
         .current_dir(&args.repo_path)
-        .arg("reset")
-        .arg("--hard")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW); 
-    reset_cmd
-        .spawn()
-        .map_err(|e| format!("Failed to start git reset: {}", e))?
-        .wait()
+        .arg("rev-parse").arg("--abbrev-ref").arg("HEAD")
+        .stdout(Stdio::piped()).stderr(Stdio::piped())
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
         .await
-        .map_err(|e| format!("Reset failed: {}", e))?;
-
-    let mut command = Command::new(&args.git_path);
-    command
-        .current_dir(&args.repo_path)
-        .arg("pull")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW);
-
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("Failed to start git pull: {}", e))?;
-    let stdout = child.stdout.take().unwrap();
-    let stderr = child.stderr.take().unwrap();
-    let window_clone = window.clone();
-    spawn(async move {
-        use tokio::io::{AsyncBufReadExt, BufReader};
-        let mut reader = BufReader::new(stdout).lines();
-        while let Ok(Some(line)) = reader.next_line().await {
-            let _ = window_clone.emit("git-progress", Some(line));
+        .map_err(|e| format!("Failed to get branch name: {}", e))?;
+        if !output.status.success() {
+            return Err(format!("git rev-parse failed: {}", String::from_utf8_lossy(&output.stderr)));
         }
-        let mut err_reader = BufReader::new(stderr).lines();
-        while let Ok(Some(line)) = err_reader.next_line().await {
-            let _ = window_clone.emit("git-progress", Some(line));
-        }
-    });
+        String::from_utf8_lossy(&output.stdout).trim().to_string()
+    };
 
-    let status = child
-        .wait()
-        .await
-        .map_err(|e| format!("Git failed: {}", e))?;
-    if !status.success() {
-        return Err(format!(
-            "Git exited with code: {}",
-            status.code().unwrap_or(-1)
-        ));
-    }
+    let mut run_and_stream = |label: &'static str, git_args: Vec<&str>| {
+        let window_clone = window.clone();
+        let mut cmd = Command::new(&args.git_path);
+        cmd.current_dir(&args.repo_path)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GCM_INTERACTIVE", "Never")
+            .env("GIT_ASKPASS", "")
+            .args(git_args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .creation_flags(CREATE_NO_WINDOW);
+        async move {
+            let mut child = cmd.spawn().map_err(|e| format!("Failed to start {}: {}", label, e))?;
+            let stdout = child.stdout.take().unwrap();
+            let stderr = child.stderr.take().unwrap();
+            tauri::async_runtime::spawn(async move {
+                use tokio::io::{AsyncBufReadExt, BufReader};
+                let mut out_reader = BufReader::new(stdout).lines();
+                while let Ok(Some(line)) = out_reader.next_line().await {
+                    let _ = window_clone.emit("git-progress", Some(format!("[{}] {}", label, line)));
+                }
+                let mut err_reader = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = err_reader.next_line().await {
+                    let _ = window_clone.emit("git-progress", Some(format!("[{}] {}", label, line)));
+                }
+            });
+            let status = child.wait().await.map_err(|e| format!("{} failed: {}", label, e))?;
+            if !status.success() {
+                return Err(format!("{} exited with code: {}", label, status.code().unwrap_or(-1)));
+            }
+            Ok::<(), String>(())
+        }
+    };
+
+    // fetch + жесткое выравнивание по удаленной ветке
+    run_and_stream("fetch", vec!["fetch", "--prune", "origin"]).await?;
+    run_and_stream("reset", vec!["reset", "--hard", &format!("origin/{}", branch_name)]).await?;
+
+    // показать, что будет удалено среди НЕотслеживаемых (игнорируемые НЕ трогаем)
+    let _ = run_and_stream("clean-dry", vec!["clean", "-nd"]).await;
+    // удалить только неотслеживаемые и неигнорируемые
+    run_and_stream("clean", vec!["clean", "-fd"]).await?;
+
     Ok(())
 }
+
+
 
 #[derive(Deserialize)]
 pub struct ResetRepoArgs {
