@@ -50,7 +50,8 @@ const LoginPage = () => {
     async ({ login, password }: LoginInput): Promise<LoginRessult> => {
       const { data } = await axios.post(
         `${activeEndPoint}/login`,
-        { login, password }
+        { login, password },
+        { withCredentials: true }
       )
       return data
     },
