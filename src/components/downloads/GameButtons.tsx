@@ -75,9 +75,14 @@ const GameButtons = () => {
                 // dispatch(changeDownloadStatus('downloaded'));
             } else if(baseDir){
                 dispatch(changeDownloadStatus('downloaded'));
+            }else if(!baseDir){
+                dispatch(changeDownloadStatus('needFisrtInstall'));
             }
         } catch (error) {
-            // dispatch(changeDownloadStatus('needFisrtInstall'));
+            if(!baseDir){
+                dispatch(changeDownloadStatus('needFisrtInstall'));
+            }
+            
             console.log("Ошибка проверки версии:", String(error))
             // dispatch(changeDownloadStatus('downloaded'));
             // toast.error("Ошибка проверки версии:", {
