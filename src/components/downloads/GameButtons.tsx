@@ -15,7 +15,7 @@ import { SERVER_ENDPOINTS } from '@/lib/config'
 import { toast } from 'sonner'
 import { getPlayerSystemInfo, handleIgnoreClientSettings } from '@/lib/utils'
 import { WaveDots } from './WaveDots'
-import { stat } from 'fs'
+import { exists, BaseDirectory } from '@tauri-apps/plugin-fs';
 
 const GameButtons = () => {
     const status = useSelector((state: RootState) => state.downloadSlice.status)
@@ -54,8 +54,27 @@ const GameButtons = () => {
     // }, [
     //     status
     // ])
+    const checkBaseDirectoryPresence = async (): Promise<boolean> => {
+        if (!baseDir || typeof baseDir !== 'string' || baseDir.trim() === '') {
+            
+            return false
+        }
+        try {
+            
+            return await exists(baseDir)
+        } catch (error) {
+            toast.error("Ошибка проверки директории:", {})
+            console.error("Ошибка проверки директории:", error)
+            return false
+        }
+    }
 
     const checkVersion = async () => {
+        const baseDirExists = await checkBaseDirectoryPresence()
+        if (!baseDirExists) {
+            dispatch(changeDownloadStatus('needFisrtInstall'))
+        return
+        }
         // TODO hide mods button if  not downloaded
         try {
             const gitPath = await resolveResource("portable-git/bin/git.exe");

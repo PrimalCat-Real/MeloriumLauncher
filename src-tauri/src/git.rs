@@ -2,8 +2,8 @@
 use std::process::Stdio;
 
 use serde::Deserialize;
-use tauri::{Window, Emitter};
 use tauri::async_runtime::spawn;
+use tauri::{Emitter, Window};
 
 use tokio::process::Command;
 
@@ -20,16 +20,22 @@ pub struct GitPullArgs {
 #[tauri::command]
 pub async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> {
     let branch_name = {
-       let output = tokio::process::Command::new(&args.git_path)
-        .current_dir(&args.repo_path)
-        .arg("rev-parse").arg("--abbrev-ref").arg("HEAD")
-        .stdout(Stdio::piped()).stderr(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .await
-        .map_err(|e| format!("Failed to get branch name: {}", e))?;
+        let output = tokio::process::Command::new(&args.git_path)
+            .current_dir(&args.repo_path)
+            .arg("rev-parse")
+            .arg("--abbrev-ref")
+            .arg("HEAD")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+            .await
+            .map_err(|e| format!("Failed to get branch name: {}", e))?;
         if !output.status.success() {
-            return Err(format!("git rev-parse failed: {}", String::from_utf8_lossy(&output.stderr)));
+            return Err(format!(
+                "git rev-parse failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
         }
         String::from_utf8_lossy(&output.stdout).trim().to_string()
     };
@@ -46,23 +52,34 @@ pub async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> 
             .stderr(Stdio::piped())
             .creation_flags(CREATE_NO_WINDOW);
         async move {
-            let mut child = cmd.spawn().map_err(|e| format!("Failed to start {}: {}", label, e))?;
+            let mut child = cmd
+                .spawn()
+                .map_err(|e| format!("Failed to start {}: {}", label, e))?;
             let stdout = child.stdout.take().unwrap();
             let stderr = child.stderr.take().unwrap();
             tauri::async_runtime::spawn(async move {
                 use tokio::io::{AsyncBufReadExt, BufReader};
                 let mut out_reader = BufReader::new(stdout).lines();
                 while let Ok(Some(line)) = out_reader.next_line().await {
-                    let _ = window_clone.emit("git-progress", Some(format!("[{}] {}", label, line)));
+                    let _ =
+                        window_clone.emit("git-progress", Some(format!("[{}] {}", label, line)));
                 }
                 let mut err_reader = BufReader::new(stderr).lines();
                 while let Ok(Some(line)) = err_reader.next_line().await {
-                    let _ = window_clone.emit("git-progress", Some(format!("[{}] {}", label, line)));
+                    let _ =
+                        window_clone.emit("git-progress", Some(format!("[{}] {}", label, line)));
                 }
             });
-            let status = child.wait().await.map_err(|e| format!("{} failed: {}", label, e))?;
+            let status = child
+                .wait()
+                .await
+                .map_err(|e| format!("{} failed: {}", label, e))?;
             if !status.success() {
-                return Err(format!("{} exited with code: {}", label, status.code().unwrap_or(-1)));
+                return Err(format!(
+                    "{} exited with code: {}",
+                    label,
+                    status.code().unwrap_or(-1)
+                ));
             }
             Ok::<(), String>(())
         }
@@ -70,7 +87,11 @@ pub async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> 
 
     // fetch + жесткое выравнивание по удаленной ветке
     run_and_stream("fetch", vec!["fetch", "--prune", "origin"]).await?;
-    run_and_stream("reset", vec!["reset", "--hard", &format!("origin/{}", branch_name)]).await?;
+    run_and_stream(
+        "reset",
+        vec!["reset", "--hard", &format!("origin/{}", branch_name)],
+    )
+    .await?;
 
     // показать, что будет удалено среди НЕотслеживаемых (игнорируемые НЕ трогаем)
     let _ = run_and_stream("clean-dry", vec!["clean", "-nd"]).await;
@@ -79,8 +100,6 @@ pub async fn pull_repo(window: Window, args: GitPullArgs) -> Result<(), String> 
 
     Ok(())
 }
-
-
 
 #[derive(Deserialize)]
 pub struct ResetRepoArgs {
@@ -92,8 +111,7 @@ pub struct ResetRepoArgs {
 pub async fn reset_repo(_window: tauri::Window, args: ResetRepoArgs) -> Result<(), String> {
     // 1. Initialize the directory as a Git repository if it isn't already.
     let mut init = tokio::process::Command::new(&args.git_path);
-    init
-        .current_dir(&args.repo_path)
+    init.current_dir(&args.repo_path)
         .args(["init"])
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())

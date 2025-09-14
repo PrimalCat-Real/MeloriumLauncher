@@ -40,7 +40,7 @@ pub async fn launch_minecraft(
     let mut child = command
         .spawn()
         .map_err(|e| format!("Failed to start java: {}", e))?;
-     if let Some(stdout) = child.stdout.take() {
+    if let Some(stdout) = child.stdout.take() {
         let window_clone = window.clone();
         tauri::async_runtime::spawn(async move {
             use tokio::io::{AsyncBufReadExt, BufReader};

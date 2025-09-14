@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use reqwest::Client;
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use std::{fs, io};
@@ -7,30 +9,62 @@ use tauri::{Emitter, Manager};
 use tokio::{fs::File, io::AsyncWriteExt};
 use tokio_stream::StreamExt;
 use zip::ZipArchive;
-use reqwest::Client;
-use serde::Serialize;
 
 #[derive(Serialize, Clone)]
-pub struct StagePayload<'a> { label: &'a str, taskId: String }
+pub struct StagePayload<'a> {
+    label: &'a str,
+    taskId: String,
+}
 #[derive(Serialize, Clone)]
-pub struct DownloadStartPayload { name: String, totalBytes: u64, taskId: String }
+pub struct DownloadStartPayload {
+    name: String,
+    totalBytes: u64,
+    taskId: String,
+}
 #[derive(Serialize, Clone)]
-pub struct DownloadProgressPayload { downloadedBytes: u64, totalBytes: u64, speedBps: f64, etaSec: u64, taskId: String }
+pub struct DownloadProgressPayload {
+    downloadedBytes: u64,
+    totalBytes: u64,
+    speedBps: f64,
+    etaSec: u64,
+    taskId: String,
+}
 #[derive(Serialize, Clone)]
-pub struct DownloadDonePayload { path: String, taskId: String }
+pub struct DownloadDonePayload {
+    path: String,
+    taskId: String,
+}
 #[derive(Serialize, Clone)]
-pub struct UnzipStartPayload { totalEntries: usize, taskId: String }
+pub struct UnzipStartPayload {
+    totalEntries: usize,
+    taskId: String,
+}
 #[derive(Serialize, Clone)]
-pub struct UnzipProgressPayload { entriesDone: usize, percent: f64, taskId: String }
+pub struct UnzipProgressPayload {
+    entriesDone: usize,
+    percent: f64,
+    taskId: String,
+}
 #[derive(Serialize, Clone)]
-pub struct UnzipDonePayload { destination: String, taskId: String }
+pub struct UnzipDonePayload {
+    destination: String,
+    taskId: String,
+}
 #[derive(Serialize, Clone)]
-pub struct TaskErrorPayload { message: String, taskId: String }
-
-fn emit_stage(window: &tauri::Window, task_id: &str, label: &str) {
-    let _ = window.emit("stage", StagePayload { label, taskId: task_id.to_string() });
+pub struct TaskErrorPayload {
+    message: String,
+    taskId: String,
 }
 
+fn emit_stage(window: &tauri::Window, task_id: &str, label: &str) {
+    let _ = window.emit(
+        "stage",
+        StagePayload {
+            label,
+            taskId: task_id.to_string(),
+        },
+    );
+}
 
 #[tauri::command]
 pub async fn download_from_drive_api(

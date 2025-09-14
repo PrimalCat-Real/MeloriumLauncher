@@ -21,6 +21,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
+ "tauri-plugin-fs",
  "tauri-plugin-hwinfo",
  "tauri-plugin-log",
  "tauri-plugin-process",

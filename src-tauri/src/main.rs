@@ -1,16 +1,16 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use serde::Deserialize;
-use std::{process::Stdio};
-use tokio::process::Command;
 use globset::{GlobBuilder, GlobSetBuilder};
+use serde::Deserialize;
+use std::process::Stdio;
+use tokio::process::Command;
 mod download;
 
-use download::{download_from_drive_api, unzip_with_progress, download_and_unzip_drive};
+use download::{download_and_unzip_drive, download_from_drive_api, unzip_with_progress};
 mod utils;
 use utils::{
-    get_local_version_json, get_total_memory_mb, is_dir_empty, list_mod_jar_files, toggle_mod_file
+    get_local_version_json, get_total_memory_mb, is_dir_empty, list_mod_jar_files, toggle_mod_file,
 };
 
 mod rungame;
@@ -20,11 +20,9 @@ mod git;
 use git::{pull_repo, reset_repo};
 
 mod mods;
-use mods::{hash_mods, delete_extra_files, download_mod_file};
-
+use mods::{delete_extra_files, download_mod_file, hash_mods};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
 
 #[derive(Deserialize)]
 struct CleanWithIgnoreArgs {
@@ -43,10 +41,10 @@ fn build_globset(patterns: &[String]) -> Result<globset::GlobSet, String> {
             .map_err(|e| format!("Failed to build glob pattern '{}': {}", pattern, e))?;
         builder.add(glob);
     }
-    builder.build().map_err(|e| format!("Failed to build globset: {}", e))
+    builder
+        .build()
+        .map_err(|e| format!("Failed to build globset: {}", e))
 }
-
-
 
 #[derive(Deserialize)]
 struct GitCheckUpdateArgs {
@@ -111,9 +109,9 @@ async fn check_git_update(args: GitCheckUpdateArgs) -> Result<bool, String> {
     Ok(local_hash != remote_hash)
 }
 
-
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())

@@ -16,8 +16,10 @@
     "hwinfo:allow-ram-info",
     "hwinfo:allow-os-info",
     "updater:default",
-    "process:default"
-    
+    "process:default",
+    "fs:read-all",
+    "fs:allow-exists",
+    { "identifier": "fs:scope", "allow": ["**"] }
     
   ]
 }
