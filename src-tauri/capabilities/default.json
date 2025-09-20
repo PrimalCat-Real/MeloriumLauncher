@@ -18,7 +18,9 @@
     "updater:default",
     "process:default",
     "fs:read-all",
+    "fs:allow-remove",
     "fs:allow-exists",
+    { "identifier": "fs:allow-remove", "allow": [{ "path": "**" }] },
     { "identifier": "fs:scope", "allow": ["**"] }
     
   ]

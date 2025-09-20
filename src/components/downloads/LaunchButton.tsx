@@ -9,7 +9,7 @@ import { join, resolveResource } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { LoaderCircle } from 'lucide-react';
-import { getPublicIp, whitelistIp } from '@/lib/utils';
+import { deleteFiles, getPublicIp, whitelistIp } from '@/lib/utils';
 import { useModsAudit } from '@/hooks/useModsAudit';
 
 interface LauncStatus {
@@ -21,7 +21,7 @@ const LaunchButton = () => {
     const dispatch = useDispatch();
     const { activeEndPoint } = useSelector((s: RootState) => s.settingsState);
 
-    const { runAudit, deleteExtras, downloadSelected } = useModsAudit();
+    const { runAudit, resolveAndDownload } = useModsAudit();
     const [launchStatus, setLaunchStatus]  = useState<LauncStatus>({status: "idle"})
     const { userLogin, userUuid, userPassword } = useSelector(
       (state: RootState) => state.authSlice
@@ -45,20 +45,60 @@ const LaunchButton = () => {
           
           setLaunchStatus({status: "verify"})
           const gitPath = await resolveResource("portable-git/bin/git.exe");
-          const taskId = crypto.randomUUID();
-          await invoke("reset_repo", {
+          // const taskId = crypto.randomUUID();
+          // await invoke("reset_repo", {
+          //   args: {
+          //     git_path: gitPath,
+          //     repo_path: gameDir,
+          //   },
+          // });
+
+          await invoke("reset_repository_hard", {
             args: {
               git_path: gitPath,
-              repo_path: gameDir,
+              repository_path: gameDir,
+              hard_target: "HEAD",
             },
           });
 
-          // await invoke("reset_repo_selective", {
-          //   gitPath: gitPath,
-          //   repoPath: gameDir,
-          //   taskId: taskId,
-          // });
+          await invoke("clean_repository", {
+              args: {
+                git_path: gitPath,
+                repository_path: gameDir,
+                include_ignored: false,
+                pathspecs: null,
+              },
+          });
 
+          const modsDir = await join(gameDir, 'Melorium', 'mods');
+          const audit = await runAudit(modsDir);
+          console.log('[launch] audit:', audit);
+
+          if (audit.toDelete.length > 0) {
+            // baseDir должен соответствовать корню, относительно которого лежит modsDir
+            const deleted = await deleteFiles(modsDir, audit.toDelete);
+            console.log('[launch] deleted:', deleted);
+          }
+          const planned = Array.from(new Set([...audit.toDownload, ...audit.mismatched]));
+          console.log('[launch] planned to download:', planned);
+
+          const { downloaded, missingOnServer: unavailableOnServer } =
+            await resolveAndDownload(modsDir, planned);
+
+          console.log('[launch] downloaded:', downloaded);
+          if (unavailableOnServer.length > 0) {
+            console.warn('[launch] unavailable on server:', unavailableOnServer);
+          }
+          // await deleteExtras();
+          // const wanted = [...audit.toDownload, ...audit.mismatched];
+
+          // console.log('[launch] wanted total:', wanted.length);
+          // if (wanted.length > 0) {
+          //   const { downloadedCount, missingOnServer } = await downloadSelected(wanted);
+          //   console.log('[launch] downloadedCount:', downloadedCount, 'missing:', missingOnServer);
+          // }
+          setLaunchStatus({status: "launching"})
+          // // setLaunching(true)
           if (activeEndPoint && userLogin && userPassword) {
             fireAndForget(
               (async () => {
@@ -71,19 +111,6 @@ const LaunchButton = () => {
               })()
             );
           }
-
-          const modsDir = await join(gameDir, 'Melorium', 'mods');
-          const audit = await runAudit(modsDir);              // ← получаем фактические списки
-          await deleteExtras();
-          const wanted = [...audit.toDownload, ...audit.mismatched];
-
-          console.log('[launch] wanted total:', wanted.length);
-          if (wanted.length > 0) {
-            const { downloadedCount, missingOnServer } = await downloadSelected(wanted);
-            console.log('[launch] downloadedCount:', downloadedCount, 'missing:', missingOnServer);
-          }
-          setLaunchStatus({status: "launching"})
-          // setLaunching(true)
 
           await useMinecraftLaunch(gameParams);
         } catch (err) {

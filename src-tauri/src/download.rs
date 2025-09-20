@@ -164,9 +164,10 @@ pub async fn unzip_with_progress(
 ) -> Result<(), String> {
     emit_stage(&window, &task_id, "Распаковка");
 
-    let reader = std::fs::File::open(&source).map_err(|e| e.to_string())?;
-    let mut archive = ZipArchive::new(reader).map_err(|e| e.to_string())?;
-    let total_entries = archive.len();
+    // Открываем zip-файл
+    let reader_file = std::fs::File::open(&source).map_err(|e| e.to_string())?;
+    let mut zip_archive = ZipArchive::new(reader_file).map_err(|e| e.to_string())?;
+    let total_entries = zip_archive.len();
 
     let _ = window.emit(
         "unzip:start",
@@ -176,39 +177,59 @@ pub async fn unzip_with_progress(
         },
     );
 
-    for i in 0..total_entries {
-        let mut file = archive.by_index(i).map_err(|e| e.to_string())?;
-        let outpath = match file.enclosed_name() {
+    for entry_index in 0..total_entries {
+        let mut zip_file = zip_archive.by_index(entry_index).map_err(|e| e.to_string())?;
+        let output_path = match zip_file.enclosed_name() {
             Some(path) => Path::new(&destination).join(path),
             None => continue,
         };
 
-        if file.is_dir() {
-            fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
+        if zip_file.is_dir() {
+            fs::create_dir_all(&output_path).map_err(|e| e.to_string())?;
         } else {
-            if let Some(parent) = outpath.parent() {
+            if let Some(parent) = output_path.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
-            if outpath.exists() {
-                fs::remove_file(&outpath).map_err(|e| e.to_string())?;
+            if output_path.exists() {
+                fs::remove_file(&output_path).map_err(|e| e.to_string())?;
             }
-            let mut outfile = std::fs::File::create(&outpath).map_err(|e| e.to_string())?;
-            io::copy(&mut file, &mut outfile).map_err(|e| e.to_string())?;
+            let mut outfile = std::fs::File::create(&output_path).map_err(|e| e.to_string())?;
+            io::copy(&mut zip_file, &mut outfile).map_err(|e| e.to_string())?;
         }
 
-        let percent = ((i + 1) as f64 / total_entries as f64) * 100.0;
+        let percent = ((entry_index + 1) as f64 / total_entries as f64) * 100.0;
         let _ = window.emit(
             "unzip:progress",
             UnzipProgressPayload {
-                entriesDone: i + 1,
+                entriesDone: entry_index + 1,
                 percent,
                 taskId: task_id.clone(),
             },
         );
     }
 
+    // Критично: закрыть дескрипторы архива перед удалением исходника.
+    drop(zip_archive);
+
+    // Удаляем исходный архив после успешной распаковки.
     if remove_source {
-        let _ = fs::remove_file(&source);
+        // Небольшой устойчивый ретрай для Windows, где файл мог ещё удерживаться антивирусом/индексатором.
+        let mut last_err: Option<std::io::Error> = None;
+        for _ in 0..5 {
+            match fs::remove_file(&source) {
+                Ok(_) => {
+                    last_err = None;
+                    break;
+                }
+                Err(err) => {
+                    last_err = Some(err);
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                }
+            }
+        }
+        if let Some(err) = last_err {
+            return Err(format!("Failed to remove source archive: {}", err));
+        }
     }
 
     let _ = window.emit(
@@ -222,6 +243,7 @@ pub async fn unzip_with_progress(
     emit_stage(&window, &task_id, "Готово");
     Ok(())
 }
+
 
 #[tauri::command]
 pub async fn download_and_unzip_drive(

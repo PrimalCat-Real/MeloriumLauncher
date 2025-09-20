@@ -153,7 +153,7 @@ const GameButtons = () => {
         <div>
             {status === 'needFisrtInstall' && <DownloadButton />}
             {status === 'needUpdate' && <UpdateButton />}
-            {(status === 'downloaded' || status === 'needUpdate') && <LaunchButton/>}
+            {(status === 'downloaded') && <LaunchButton/>}
         </div>
     )
 }

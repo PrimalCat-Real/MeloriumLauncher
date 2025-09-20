@@ -1,9 +1,8 @@
 // app/hooks/useModsAudit.ts
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import axios from 'axios';
-import pLimit from 'p-limit';
 import { invoke } from '@tauri-apps/api/core';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store/configureStore';
@@ -17,24 +16,6 @@ type ModsManifest = {
   optional: ManifestFile[];
 };
 
-type AuditResult = {
-  toDelete: string[];
-  toDownload: string[];
-  mismatched: string[];
-  totalDownloadBytes: number;
-  totalDownloadCount: number;
-};
-
-type Status =
-  | 'idle'
-  | 'hashing'
-  | 'fetching'
-  | 'diffing'
-  | 'deleting'
-  | 'downloading'
-  | 'ready'
-  | 'error';
-
 type ResolveItem = { path: string; size: number; sha256: string; url: string };
 type ResolveResponse = {
   available: ResolveItem[];
@@ -43,77 +24,70 @@ type ResolveResponse = {
   totalCount: number;
 };
 
-const CONCURRENCY = 3;
-const DEBUG = false; // при необходимости включи
-
-const logGroup = (title: string, fn: () => void): void => {
-  if (!DEBUG) return;
-  // eslint-disable-next-line no-console
-  console.groupCollapsed(title);
-  try {
-    fn();
-  } finally {
-    // eslint-disable-next-line no-console
-    console.groupEnd();
-  }
+type AuditResult = {
+  toDelete: string[];
+  toDownload: string[];
+  mismatched: string[];
+  totalDownloadBytes: number;
+  totalDownloadCount: number;
 };
 
-const log = (...args: unknown[]): void => {
-  if (!DEBUG) return;
-  // eslint-disable-next-line no-console
-  console.log(...args);
+type ResolveResult = {
+  downloaded: string[];
+  missingOnServer: string[];
 };
 
-const logTable = (label: string, rows: unknown[]): void => {
-  if (!DEBUG) return;
-  // eslint-disable-next-line no-console
-  console.log(label);
-  // eslint-disable-next-line no-console
-  console.table(rows);
+type DownloadPlannedResult = {
+  planned: string[];
+  downloaded: string[];
+  missingOnServer: string[];
 };
 
+type Status = 'idle' | 'hashing' | 'fetching' | 'diffing' | 'downloading' | 'ready' | 'error';
+
+// Build base URL from endpoint
 const buildBaseUrl = (endpoint: string | null | undefined): string => {
   if (!endpoint || endpoint.trim().length === 0) return '';
-  let base = String(endpoint);
-  if (!/^https?:\/\//i.test(base)) base = `http://${base}`;
-  base = base.replace(/\/+$/, '');
-  return base;
+  let baseUrl = String(endpoint);
+  if (!/^https?:\/\//i.test(baseUrl)) baseUrl = `http://${baseUrl}`;
+  return baseUrl.replace(/\/+$/, '');
 };
 
-const normalizePath = (p: string): string => p.replace(/\\/g, '/');
-const isJar = (p: string): boolean => /\.jar$/i.test(p);
-const isJarDisabled = (p: string): boolean => /\.jar\.disabled$/i.test(p);
-const toBaseName = (p: string): string => p.replace(/\.jar(\.disabled)?$/i, '');
-const baseKey = (p: string): string => toBaseName(normalizePath(p)).toLowerCase();
+// Path helpers
+const normalizePath = (inputPath: string): string => inputPath.replace(/\\/g, '/');
+const isJar = (filePath: string): boolean => /\.jar$/i.test(filePath);
+const isJarDisabled = (filePath: string): boolean => /\.jar\.disabled$/i.test(filePath);
+const toBaseName = (filePath: string): string => filePath.replace(/\.jar(\.disabled)?$/i, '');
+const baseKey = (filePath: string): string => toBaseName(normalizePath(filePath)).toLowerCase();
 
-// версионный хвост: -1.2.3, _v1.2, -beta, +build, и т.п.
+// Version helpers
 const VERSION_TAIL_RE = /([-_.]v?\d[\w.+-]*)$/i;
-const toStem = (p: string): string => baseKey(p).replace(VERSION_TAIL_RE, '');
-
-// извлечь версию для сравнения
-const extractVersion = (p: string): string => {
-  const k = baseKey(p);
-  const m = k.match(VERSION_TAIL_RE);
-  return m ? m[1].replace(/^[-_.]v?/i, '') : '';
+const toStem = (filePath: string): string => baseKey(filePath).replace(VERSION_TAIL_RE, '');
+const extractVersion = (filePath: string): string => {
+  const key = baseKey(filePath);
+  const match = key.match(VERSION_TAIL_RE);
+  return match ? match[1].replace(/^[-_.]v?/i, '') : '';
 };
 
-// сравнение версий: числовые токены как числа, остальное лексикографически
-const compareVersions = (aRaw: string, bRaw: string): number => {
-  const split = (s: string) => s.split(/[^0-9A-Za-z]+/).filter(Boolean);
-  const a = split(aRaw);
-  const b = split(bRaw);
-  const len = Math.max(a.length, b.length);
-  for (let i = 0; i < len; i++) {
-    const ai = a[i] ?? '';
-    const bi = b[i] ?? '';
-    const an = /^\d+$/.test(ai);
-    const bn = /^\d+$/.test(bi);
-    if (an && bn) {
-      const na = Number(ai);
-      const nb = Number(bi);
-      if (na !== nb) return na < nb ? -1 : 1;
-    } else {
-      if (ai !== bi) return ai < bi ? -1 : 1;
+// Compare versions token by token
+const compareVersions = (leftVersion: string, rightVersion: string): number => {
+  const splitIntoTokens = (input: string) => input.split(/[^0-9A-Za-z]+/).filter(Boolean);
+  const leftTokens = splitIntoTokens(leftVersion);
+  const rightTokens = splitIntoTokens(rightVersion);
+  const tokenCount = Math.max(leftTokens.length, rightTokens.length);
+
+  for (let index = 0; index < tokenCount; index++) {
+    const leftToken = leftTokens[index] ?? '';
+    const rightToken = rightTokens[index] ?? '';
+    const leftIsNumeric = /^\d+$/.test(leftToken);
+    const rightIsNumeric = /^\d+$/.test(rightToken);
+
+    if (leftIsNumeric && rightIsNumeric) {
+      const leftNumber = Number(leftToken);
+      const rightNumber = Number(rightToken);
+      if (leftNumber !== rightNumber) return leftNumber < rightNumber ? -1 : 1;
+    } else if (leftToken !== rightToken) {
+      return leftToken < rightToken ? -1 : 1;
     }
   }
   return 0;
@@ -126,153 +100,112 @@ export const useModsAudit = () => {
   const [toDelete, setToDelete] = useState<string[]>([]);
   const [toDownload, setToDownload] = useState<string[]>([]);
   const [mismatched, setMismatched] = useState<string[]>([]);
-
   const [totalDownloadBytes, setTotalDownloadBytes] = useState<number>(0);
   const [totalDownloadCount, setTotalDownloadCount] = useState<number>(0);
 
-  const [downloadedBytes, setDownloadedBytes] = useState<number>(0);
-  const [speedBps, setSpeedBps] = useState<number>(0);
-
-  const modsDirRef = useRef<string>('');
-  const speedWindowRef = useRef<{ lastTs: number; lastBytes: number }>({ lastTs: 0, lastBytes: 0 });
-
-  const activeEndPoint = useSelector((s: RootState) => s.settingsState.activeEndPoint);
-  const userLogin = useSelector((s: RootState) => s.authSlice.userLogin);
-  const userPassword = useSelector((s: RootState) => s.authSlice.userPassword);
+  const activeEndPoint = useSelector((state: RootState) => state.settingsState.activeEndPoint);
+  const { userLogin, userPassword } = useSelector((state: RootState) => state.authSlice);
 
   const runAudit = useCallback(
     async (modsDir: string): Promise<AuditResult> => {
-      const t0 = performance.now();
+      const tStartAll = performance.now();
       setStatus('hashing');
       setError(null);
-      modsDirRef.current = modsDir;
 
-      const base = buildBaseUrl(activeEndPoint);
-      if (!base) {
+      const baseUrl = buildBaseUrl(activeEndPoint);
+      if (!baseUrl) {
         setStatus('error');
         setError('Active endpoint is not set.');
-        return {
-          toDelete: [],
-          toDownload: [],
-          mismatched: [],
-          totalDownloadBytes: 0,
-          totalDownloadCount: 0,
-        };
+        return { toDelete: [], toDownload: [], mismatched: [], totalDownloadBytes: 0, totalDownloadCount: 0 };
       }
 
-      logGroup('[mods-audit] setup', () => {
-        log('endpoint:', base);
-        log('modsDir:', modsDir);
-        log('user:', userLogin ?? '<empty>');
-      });
+      console.log('[mods-audit] start', { endpoint: baseUrl, modsDir });
 
-      // 1) Локальные файлы
+      // 1) Hash local files
       let localFiles: LocalFile[] = [];
-      const tHashStart = performance.now();
+      const tStartHash = performance.now();
       try {
-        const hashed = (await invoke('hash_mods', { dir: modsDir })) as LocalFile[];
-        const next: LocalFile[] = [];
-        for (const f of hashed) {
-          if (isJar(f.path) || isJarDisabled(f.path)) next.push(f);
+        const hashedList = (await invoke('hash_mods', { dir: modsDir })) as LocalFile[];
+        const filtered: LocalFile[] = [];
+        for (const file of hashedList) {
+          if (isJar(file.path) || isJarDisabled(file.path)) filtered.push(file);
         }
-        localFiles = next;
-        logGroup('[mods-audit] local hashing', () => {
-          log(`count: ${localFiles.length}`);
-          logTable('sample (first 20)', localFiles.slice(0, 20));
-        });
-      } catch (e) {
+        localFiles = filtered;
+        console.log('[mods-audit] local count:', localFiles.length);
+      } catch (errorCaught) {
         setStatus('error');
-        setError(`hash_mods failed: ${e instanceof Error ? e.message : String(e)}`);
-        log('[mods-audit] hash_mods error:', e);
-        return {
-          toDelete: [],
-          toDownload: [],
-          mismatched: [],
-          totalDownloadBytes: 0,
-          totalDownloadCount: 0,
-        };
+        setError(`hash_mods failed: ${errorCaught instanceof Error ? errorCaught.message : String(errorCaught)}`);
+        console.log('[mods-audit] hash_mods error:', errorCaught);
+        return { toDelete: [], toDownload: [], mismatched: [], totalDownloadBytes: 0, totalDownloadCount: 0 };
       } finally {
-        log('[mods-audit] hash time ms:', Math.max(0, Math.round(performance.now() - tHashStart)));
+        console.log('[mods-audit] hash time ms:', Math.max(0, Math.round(performance.now() - tStartHash)));
       }
 
-      await Promise.resolve();
-
-      // 2) Серверный манифест
+      // 2) Fetch server manifest
       setStatus('fetching');
       let manifest: ModsManifest;
-      const tFetchStart = performance.now();
+      const tStartFetch = performance.now();
       try {
-        const { data } = await axios.get<ModsManifest>(`${base}/mods-manifest`, {
+        const { data } = await axios.get<ModsManifest>(`${baseUrl}/mods-manifest`, {
           withCredentials: true,
           timeout: 15000,
         });
         manifest = data;
-        logGroup('[mods-audit] server manifest', () => {
-          log('generatedAt:', manifest.generatedAt);
-          log('dirHash:', manifest.dirHash);
-          log(`required: ${manifest.required.length}, optional: ${manifest.optional.length}`);
-          logTable('required (first 20)', manifest.required.slice(0, 20));
-          logTable('optional (first 20)', manifest.optional.slice(0, 20));
+        console.log('[mods-audit] manifest sizes:', {
+          required: manifest.required.length,
+          optional: manifest.optional.length,
         });
-      } catch (e) {
+      } catch (errorCaught) {
         setStatus('error');
-        setError(`manifest fetch failed: ${e instanceof Error ? e.message : String(e)}`);
-        log('[mods-audit] fetch manifest error:', e);
-        return {
-          toDelete: [],
-          toDownload: [],
-          mismatched: [],
-          totalDownloadBytes: 0,
-          totalDownloadCount: 0,
-        };
+        setError(`manifest fetch failed: ${errorCaught instanceof Error ? errorCaught.message : String(errorCaught)}`);
+        console.log('[mods-audit] fetch manifest error:', errorCaught);
+        return { toDelete: [], toDownload: [], mismatched: [], totalDownloadBytes: 0, totalDownloadCount: 0 };
       } finally {
-        log('[mods-audit] manifest fetch time ms:', Math.max(0, Math.round(performance.now() - tFetchStart)));
+        console.log('[mods-audit] manifest fetch time ms:', Math.max(0, Math.round(performance.now() - tStartFetch)));
       }
 
-      await Promise.resolve();
-
-      // 3) Эффективные серверные наборы: оставляем по одной версии на семью (самая "новая")
+      // 3) Diff
       setStatus('diffing');
-      const tDiffStart = performance.now();
+      const tStartDiff = performance.now();
 
       type ServerEntry = {
-        mf: ManifestFile;
+        manifestFile: ManifestFile;
         base: string;
         stem: string;
-        version: string; // из имени
+        version: string;
         kind: 'required' | 'optional';
       };
 
-      const requiredList: ServerEntry[] = manifest.required.map((mf) => ({
-        mf,
-        base: baseKey(mf.path),
-        stem: toStem(mf.path),
-        version: extractVersion(mf.path),
+      const requiredEntries: ServerEntry[] = manifest.required.map((manifestFile) => ({
+        manifestFile,
+        base: baseKey(manifestFile.path),
+        stem: toStem(manifestFile.path),
+        version: extractVersion(manifestFile.path),
         kind: 'required',
       }));
-      const optionalList: ServerEntry[] = manifest.optional.map((mf) => ({
-        mf,
-        base: baseKey(mf.path),
-        stem: toStem(mf.path),
-        version: extractVersion(mf.path),
+
+      const optionalEntries: ServerEntry[] = manifest.optional.map((manifestFile) => ({
+        manifestFile,
+        base: baseKey(manifestFile.path),
+        stem: toStem(manifestFile.path),
+        version: extractVersion(manifestFile.path),
         kind: 'optional',
       }));
 
-      const allServer: ServerEntry[] = [...requiredList, ...optionalList];
+      const allServerEntries: ServerEntry[] = [...requiredEntries, ...optionalEntries];
 
       const bestByStem = new Map<string, ServerEntry>();
-      for (const e of allServer) {
-        const prev = bestByStem.get(e.stem);
-        if (!prev) {
-          bestByStem.set(e.stem, e);
+      for (const serverEntry of allServerEntries) {
+        const previousBest = bestByStem.get(serverEntry.stem);
+        if (!previousBest) {
+          bestByStem.set(serverEntry.stem, serverEntry);
         } else {
-          const cmp = compareVersions(prev.version, e.version);
-          // если версия неизвестна у обеих, fallback на лексикографию base
-          if (prev.version === '' && e.version === '') {
-            if (prev.base < e.base) continue;
-            bestByStem.set(e.stem, e);
+          const cmp = compareVersions(previousBest.version, serverEntry.version);
+          if (previousBest.version === '' && serverEntry.version === '') {
+            if (previousBest.base < serverEntry.base) continue;
+            bestByStem.set(serverEntry.stem, serverEntry);
           } else if (cmp < 0) {
-            bestByStem.set(e.stem, e);
+            bestByStem.set(serverEntry.stem, serverEntry);
           }
         }
       }
@@ -280,25 +213,24 @@ export const useModsAudit = () => {
       const requiredByBase = new Map<string, ManifestFile>();
       const optionalByBase = new Map<string, ManifestFile>();
       for (const [, best] of bestByStem) {
-        if (best.kind === 'required') requiredByBase.set(best.base, best.mf);
-        else optionalByBase.set(best.base, best.mf);
+        if (best.kind === 'required') requiredByBase.set(best.base, best.manifestFile);
+        else optionalByBase.set(best.base, best.manifestFile);
       }
 
       const requiredBases = new Set<string>(Array.from(requiredByBase.keys()));
       const optionalBases = new Set<string>(Array.from(optionalByBase.keys()));
       const serverStems = new Set<string>(Array.from(bestByStem.keys()));
 
-      // 4) Индексы локальных
       const localEnabledByBase = new Map<string, LocalFile>();
       const localDisabledByBase = new Map<string, LocalFile>();
       const localAllBases = new Set<string>();
-      for (const lf of localFiles) {
-        const key = baseKey(lf.path);
-        if (isJar(lf.path)) {
-          localEnabledByBase.set(key, lf);
+      for (const localFile of localFiles) {
+        const key = baseKey(localFile.path);
+        if (isJar(localFile.path)) {
+          localEnabledByBase.set(key, localFile);
           localAllBases.add(key);
-        } else if (isJarDisabled(lf.path)) {
-          localDisabledByBase.set(key, lf);
+        } else if (isJarDisabled(localFile.path)) {
+          localDisabledByBase.set(key, localFile);
           localAllBases.add(key);
         }
       }
@@ -308,7 +240,7 @@ export const useModsAudit = () => {
       const nextMismatched: string[] = [];
       let bytesToDownload = 0;
 
-      // 5) Required: отсутствует → скачать; mismatch → скачать и удалить текущий
+      // Required
       for (const baseName of requiredBases) {
         const serverMeta = requiredByBase.get(baseName);
         if (!serverMeta) continue;
@@ -325,12 +257,12 @@ export const useModsAudit = () => {
 
         if (enabledLocal.sha256 !== serverMeta.sha256 || enabledLocal.size !== serverMeta.size) {
           nextMismatched.push(serverMeta.path);
-          nextToDelete.push(enabledLocal.path); // гарантированная перезапись
+          nextToDelete.push(enabledLocal.path);
           bytesToDownload += serverMeta.size;
         }
       }
 
-      // 6) Optional: аналогично, но disabled оставляем как есть
+      // Optional
       for (const baseName of optionalBases) {
         const serverMeta = optionalByBase.get(baseName);
         if (!serverMeta) continue;
@@ -339,11 +271,7 @@ export const useModsAudit = () => {
         const disabledLocal = localDisabledByBase.get(baseName);
 
         if (!enabledLocal && disabledLocal) continue;
-
-        if (!enabledLocal) {
-          // по желанию можно автоскачивать optional, но сейчас не добавляем
-          continue;
-        }
+        if (!enabledLocal) continue;
 
         if (enabledLocal.sha256 !== serverMeta.sha256 || enabledLocal.size !== serverMeta.size) {
           nextMismatched.push(serverMeta.path);
@@ -352,266 +280,125 @@ export const useModsAudit = () => {
         }
       }
 
-      // 7) Удалить все лишние и старые версии семей
+      // Unknown families
       for (const baseName of localAllBases) {
         const isKnown = requiredBases.has(baseName) || optionalBases.has(baseName);
         if (!isKnown) {
-          const e = localEnabledByBase.get(baseName);
-          const d = localDisabledByBase.get(baseName);
-          if (e) nextToDelete.push(e.path);
-          if (d) nextToDelete.push(d.path);
-          continue;
+          const enabledLocal = localEnabledByBase.get(baseName);
+          const disabledLocal = localDisabledByBase.get(baseName);
+          if (enabledLocal) nextToDelete.push(enabledLocal.path);
+          if (disabledLocal) nextToDelete.push(disabledLocal.path);
         }
       }
 
-      // Если сервер по ошибке держал несколько версий в одной семье, оставляем только "лучшую"
-      // и удаляем локальные, у которых stem совпадает, но baseName != best.base.
+      // Keep only server-best per stem
       for (const baseName of localAllBases) {
         const stem = baseName.replace(VERSION_TAIL_RE, '');
         if (!serverStems.has(stem)) continue;
         const best = bestByStem.get(stem);
         if (!best) continue;
         if (baseName !== best.base) {
-          const e = localEnabledByBase.get(baseName);
-          const d = localDisabledByBase.get(baseName);
-          if (e) nextToDelete.push(e.path);
-          if (d) nextToDelete.push(d.path);
+          const enabledLocal = localEnabledByBase.get(baseName);
+          const disabledLocal = localDisabledByBase.get(baseName);
+          if (enabledLocal) nextToDelete.push(enabledLocal.path);
+          if (disabledLocal) nextToDelete.push(disabledLocal.path);
         }
       }
 
-      const dedupDelete = Array.from(new Set(nextToDelete));
+      const deduplicatedDelete = Array.from(new Set(nextToDelete));
 
-      logGroup('[mods-audit] diff result', () => {
-        log('bytesToDownload:', bytesToDownload);
-        logTable('toDownload', nextToDownload.map((p) => ({ path: p })));
-        logTable('mismatched', nextMismatched.map((p) => ({ path: p })));
-        logTable('toDelete', dedupDelete.map((p) => ({ path: p })));
-      });
-
-      setToDelete(dedupDelete);
+      setToDelete(deduplicatedDelete);
       setToDownload(nextToDownload);
       setMismatched(nextMismatched);
       setTotalDownloadBytes(bytesToDownload);
       setTotalDownloadCount(nextToDownload.length + nextMismatched.length);
       setStatus('ready');
 
-      const dtDiff = Math.max(0, Math.round(performance.now() - tDiffStart));
-      const totalDt = Math.max(0, Math.round(performance.now() - t0));
-      log('[mods-audit] diff time ms:', dtDiff, 'total runAudit ms:', totalDt);
+      const diffMs = Math.max(0, Math.round(performance.now() - tStartDiff));
+      const totalMs = Math.max(0, Math.round(performance.now() - tStartAll));
+      console.log('[mods-audit] done', { diffMs, totalMs });
 
       return {
-        toDelete: dedupDelete,
+        toDelete: deduplicatedDelete,
         toDownload: nextToDownload,
         mismatched: nextMismatched,
         totalDownloadBytes: bytesToDownload,
         totalDownloadCount: nextToDownload.length + nextMismatched.length,
       };
     },
-    [activeEndPoint, userLogin]
-  );
-
-  const deleteExtras = useCallback(async (): Promise<number> => {
-    if (toDelete.length === 0 || !modsDirRef.current) {
-      log('[mods-audit] deleteExtras: nothing to delete');
-      return 0;
-    }
-    setStatus('deleting');
-    logGroup('[mods-audit] deleting extras', () => {
-      log('baseDir:', modsDirRef.current);
-      logTable('relativePaths', toDelete.map((p) => ({ path: p })));
-    });
-    try {
-      const deleted = (await invoke('delete_extra_files', {
-        baseDir: modsDirRef.current,
-        relativePaths: toDelete,
-      })) as number;
-      setStatus('ready');
-      log('[mods-audit] deleted count:', deleted);
-      return deleted;
-    } catch (e) {
-      setStatus('error');
-      setError(`delete_extra_files failed: ${e instanceof Error ? e.message : String(e)}`);
-      log('[mods-audit] delete_extra_files error:', e);
-      return 0;
-    }
-  }, [toDelete]);
-
-  const resetDownloadProgress = useCallback((totalBytes: number) => {
-    setDownloadedBytes(0);
-    setSpeedBps(0);
-    setTotalDownloadBytes(totalBytes);
-    speedWindowRef.current = { lastTs: performance.now(), lastBytes: 0 };
-    log('[mods-audit] progress reset, totalBytes:', totalBytes);
-  }, []);
-
-  const addDownloaded = useCallback(
-    (deltaBytes: number) => {
-      setDownloadedBytes((prev) => {
-        const next = prev + deltaBytes;
-        const now = performance.now();
-        const { lastTs, lastBytes } = speedWindowRef.current;
-        const dtMs = now - lastTs;
-        if (dtMs >= 250) {
-          const dBytes = next - lastBytes;
-          const bps = dBytes > 0 && dtMs > 0 ? (dBytes * 1000) / dtMs : 0;
-          setSpeedBps((prevBps) => (prevBps === 0 ? bps : prevBps * 0.7 + bps * 0.3));
-          speedWindowRef.current = { lastTs: now, lastBytes: next };
-          log('[mods-audit] progress tick:', {
-            downloadedBytes: next,
-            totalDownloadBytes,
-            speedBps: Math.round(bps),
-            pct: totalDownloadBytes > 0 ? Math.floor((next / totalDownloadBytes) * 100) : 0,
-          });
-        }
-        return next;
-      });
-    },
-    [totalDownloadBytes]
+    [activeEndPoint]
   );
 
   const resolveAndDownload = useCallback(
-    async (wanted: string[]): Promise<{ downloadedCount: number; missingOnServer: string[] }> => {
-      const base = buildBaseUrl(activeEndPoint);
-      if (!base) {
-        setError('Active endpoint is not set.');
-        return { downloadedCount: 0, missingOnServer: [] };
-      }
-      if (!modsDirRef.current) {
-        setError('modsDir is not set. Call runAudit first.');
-        return { downloadedCount: 0, missingOnServer: [] };
-      }
-      if (wanted.length === 0) {
-        log('[mods-audit] resolveAndDownload: nothing to download');
-        return { downloadedCount: 0, missingOnServer: [] };
+    async (modsDir: string, filePaths: string[]): Promise<ResolveResult> => {
+      const baseUrl = buildBaseUrl(activeEndPoint);
+      if (!baseUrl || !userLogin || !userPassword || filePaths.length === 0) {
+        return { downloaded: [], missingOnServer: [] };
       }
 
-      logGroup('[mods-audit] download plan request', () => {
-        log('endpoint:', base);
-        log('modsDir:', modsDirRef.current);
-        logTable('wanted', wanted.map((p) => ({ path: p })));
-      });
-
-      setStatus('fetching');
-      const tResolve = performance.now();
-      const { data } = await axios.post<ResolveResponse>(
-        `${base}/download/resolve-mods`,
-        { files: wanted, username: userLogin, password: userPassword },
-        { withCredentials: true, timeout: 20000 }
-      );
-      logGroup('[mods-audit] download plan response', () => {
-        log('totalBytes:', data.totalBytes, 'totalCount:', data.totalCount);
-        logTable(
-          'available',
-          (data.available ?? []).map((x) => ({ path: x.path, size: x.size, url: x.url }))
+      try {
+        setStatus('fetching');
+        const { data } = await axios.post<ResolveResponse>(
+          `${baseUrl}/download/resolve-mods`,
+          { files: filePaths, username: userLogin, password: userPassword },
+          { withCredentials: true, timeout: 20000 }
         );
-        logTable('missing', (data.missing ?? []).map((p) => ({ path: p })));
-      });
-      log('[mods-audit] resolve time ms:', Math.round(performance.now() - tResolve));
 
-      resetDownloadProgress(data.totalBytes);
+        console.log('[mods-download] plan', { totalBytes: data.totalBytes, totalCount: data.totalCount });
 
-      // Перед скачиванием принудительно удалим целевые имена,
-      // чтобы перекачка с тем же именем всегда сработала.
-      if (data.available?.length) {
-        const overwriteTargets = Array.from(new Set(data.available.map((x) => x.path)));
-        logGroup('[mods-audit] pre-delete overwrite targets', () => {
-          logTable('targets', overwriteTargets.map((p) => ({ path: p })));
-        });
-        try {
-          await invoke('delete_extra_files', {
-            baseDir: modsDirRef.current,
-            relativePaths: overwriteTargets,
-          });
-        } catch (e) {
-          log('[mods-audit] pre-delete overwrite error:', e);
-          // продолжаем, загрузчик на Rust должен открывать с truncate
+        // Ensure overwrite by pre-deleting target names
+        const overwriteTargets = Array.from(new Set((data.available ?? []).map((item) => item.path)));
+        if (overwriteTargets.length > 0) {
+          try {
+            await invoke('delete_extra_files', { baseDir: modsDir, relativePaths: overwriteTargets });
+          } catch (errorCaught) {
+            console.log('[mods-download] pre-delete failed, continue:', errorCaught);
+          }
         }
-      }
 
-      setStatus('downloading');
-      const limit = pLimit(CONCURRENCY);
-      let downloadedCount = 0;
+        setStatus('downloading');
+        const downloadedFiles: string[] = [];
 
-      const tasks: Promise<void>[] = [];
-      for (const item of data.available) {
-        const task = limit(async () => {
-          const tStart = performance.now();
-          logGroup(`[mods-audit] download start: ${item.path}`, () => {
-            log('url:', `${base}${item.url}`);
-            log('size:', item.size);
-          });
+        for (const item of data.available ?? []) {
           try {
             await invoke('download_mod_file', {
-              url: `${base}${item.url}`,
-              path: modsDirRef.current,
-              mod_name: item.path,
+              url: `${baseUrl}${item.url}`,
+              path: modsDir,
               modName: item.path,
               username: userLogin,
               password: userPassword,
             });
-            addDownloaded(item.size);
-            downloadedCount += 1;
-            log(
-              `[mods-audit] download ok: ${item.path} (${Math.round(performance.now() - tStart)} ms)`
-            );
-          } catch (e) {
-            const reason = e instanceof Error ? e.message : String(e);
-            log(`[mods-audit] download failed: ${item.path}`, reason);
+            downloadedFiles.push(item.path);
+          } catch (errorCaught) {
+            console.log('[mods-download] failed:', item.path, errorCaught);
           }
-        });
-        tasks.push(task);
+        }
+
+        setStatus('ready');
+        return {
+          downloaded: downloadedFiles,
+          missingOnServer: Array.isArray(data.missing) ? data.missing : [],
+        };
+      } catch (errorCaught) {
+        setStatus('error');
+        setError(errorCaught instanceof Error ? errorCaught.message : String(errorCaught));
+        return { downloaded: [], missingOnServer: [] };
       }
-
-      const tAll = performance.now();
-      for (const t of tasks) {
-        await t;
-      }
-      log('[mods-audit] all downloads done in ms:', Math.round(performance.now() - tAll));
-
-      setStatus('ready');
-      return { downloadedCount, missingOnServer: Array.isArray(data.missing) ? data.missing : [] };
     },
-    [activeEndPoint, userLogin, userPassword, resetDownloadProgress, addDownloaded]
+    [activeEndPoint, userLogin, userPassword]
   );
 
-  const downloadPlanned = useCallback(async (): Promise<{ downloadedCount: number; missingOnServer: string[] }> => {
-    const wanted: string[] = [];
-    for (const p of toDownload) wanted.push(p);
-    for (const p of mismatched) wanted.push(p);
-    return resolveAndDownload(wanted);
-  }, [toDownload, mismatched, resolveAndDownload]);
+  const downloadPlanned = useCallback(
+    async (modsDir: string): Promise<DownloadPlannedResult> => {
+      const plannedSet = new Set<string>();
+      for (const pathToFile of toDownload) plannedSet.add(pathToFile);
+      for (const pathToFile of mismatched) plannedSet.add(pathToFile);
+      const planned = Array.from(plannedSet);
 
-  const downloadSelected = useCallback(
-    async (files: string[]): Promise<{ downloadedCount: number; missingOnServer: string[] }> => {
-      const unique = Array.from(new Set(files));
-      return resolveAndDownload(unique);
+      const { downloaded, missingOnServer } = await resolveAndDownload(modsDir, planned);
+      return { planned, downloaded, missingOnServer };
     },
-    [resolveAndDownload]
-  );
-
-  const summary = useMemo(
-    () => ({
-      deleteCount: toDelete.length,
-      downloadCount: totalDownloadCount,
-      downloadBytes: totalDownloadBytes,
-      downloadedBytes,
-      speedBps,
-      progress:
-        totalDownloadBytes > 0 ? Math.min(100, Math.floor((downloadedBytes / totalDownloadBytes) * 100)) : 0,
-    }),
-    [toDelete.length, totalDownloadCount, totalDownloadBytes, downloadedBytes, speedBps]
-  );
-
-  const placeholders = useMemo(
-    () => ({
-      logPlannedDownloads: () => {
-        logGroup('[mods-audit] planned', () => {
-          if (toDownload.length > 0) logTable('toDownload', toDownload.map((p) => ({ path: p })));
-          if (mismatched.length > 0) logTable('mismatched', mismatched.map((p) => ({ path: p })));
-        });
-      },
-    }),
-    [toDownload, mismatched]
+    [toDownload, mismatched, resolveAndDownload]
   );
 
   return {
@@ -622,15 +409,10 @@ export const useModsAudit = () => {
     mismatched,
     totalDownloadBytes,
     totalDownloadCount,
-    downloadedBytes,
-    speedBps,
-    summary,
     runAudit,
-    deleteExtras,
-    resetDownloadProgress,
-    addDownloaded,
+    resolveAndDownload,
     downloadPlanned,
-    downloadSelected,
-    placeholders,
   };
 };
+
+export type { ResolveResult, DownloadPlannedResult, AuditResult };

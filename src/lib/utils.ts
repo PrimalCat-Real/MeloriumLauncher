@@ -101,6 +101,8 @@ export async function getPlayerSystemInfo() {
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import axios from "axios";
+import { BaseDirectory, remove } from "@tauri-apps/plugin-fs";
+import { join } from "@tauri-apps/api/path";
 
 async function checkAndUpdate(toaster: typeof toast) {
   try {
@@ -178,3 +180,33 @@ export const whitelistIp = async (
   }
   return res.data;
 };
+
+export const deleteFiles = async (rootDir: string,
+  relativePaths: string[]) => {
+     let count = 0;
+    for (const relativePath of relativePaths) {
+      try {
+        const fullPath = await join(rootDir, relativePath);
+        await remove(fullPath);
+        count += 1;
+      } catch (error) {
+        console.error('[delete] failed:', relativePath, error);
+      }
+    }
+    return count;
+  }
+
+
+
+// async function deleteFiles(paths: string[], baseDir: BaseDirectory): Promise<number> {
+  // let count = 0;
+  // for (const p of paths) {
+  //   try {
+  //     await remove(p, { baseDir });
+  //     count += 1;
+  //   } catch (e) {
+  //     console.error('Failed to remove', p, e);
+  //   }
+  // }
+  // return count;
+// }

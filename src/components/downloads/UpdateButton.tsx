@@ -26,134 +26,117 @@ const UpdateButton: React.FC = () => {
   const lastStageRef = useRef<string>('');
   const lastProgressLogTsRef = useRef<number>(0);
 
-  const log = useCallback((label: string, data?: unknown) => {
-    const ts = new Date().toISOString();
-    if (typeof data === 'undefined') {
-      // eslint-disable-next-line no-console
-      console.log(`[update] ${ts} ${label}`);
-      return;
-    }
-    // eslint-disable-next-line no-console
-    console.log(`[update] ${ts} ${label}`, data);
-  }, []);
-
   const handleOpenDialog = useCallback(() => {
     setDialogOpen(true);
-    log('dialog open');
-  }, [log]);
+  }, []);
 
-  const resetState = useCallback(() => {
+  const resetState = useCallback((): void => {
     setStarted(false);
     setBusy(false);
     setPercent(0);
     setStage('Ожидание');
     lastStageRef.current = '';
-    log('state reset');
-  }, [log]);
+  }, []);
 
   const handleDialogOpenChange = useCallback(
-    (open: boolean) => {
-      log('dialog change', { open });
+    (open: boolean): void => {
       if (!open) resetState();
       setDialogOpen(open);
     },
-    [log, resetState]
+    [resetState]
   );
 
   useEffect(() => {
-    const unsubs: UnlistenFn[] = [];
+    const unsubscribers: UnlistenFn[] = [];
 
     const wire = async (): Promise<void> => {
-      unsubs.push(
+      unsubscribers.push(
         await listen<string>('git-start', () => {
+          console.log('[pull] start');
           setStarted(true);
           setBusy(true);
           setPercent(0);
           setStage('Инициализация');
           lastStageRef.current = 'Инициализация';
-          log('event git-start');
         })
       );
 
-      unsubs.push(
-        await listen<string>('git-progress', (e) => {
-          const line = String(e.payload || '');
-          const now = performance.now();
-          // throttle console noise
-          if (now - lastProgressLogTsRef.current > 300) {
-            log('event git-progress', { line });
-            lastProgressLogTsRef.current = now;
+      unsubscribers.push(
+        await listen<string>('git-progress', (event) => {
+          const progressLine = String(event.payload || '');
+          const nowTs = performance.now();
+
+          console.log('[pull]', progressLine);
+
+          if (nowTs - lastProgressLogTsRef.current > 300) {
+            lastProgressLogTsRef.current = nowTs;
           }
 
-          let matched = false;
-          for (const s of STAGES as Array<{ key: string; rx: RegExp }>) {
-            const m = line.match(s.rx);
-            if (m) {
-              const v = Number(m[1]);
-              if (!Number.isNaN(v)) {
-                setPercent(Math.max(0, Math.min(100, v)));
+          let matchedStage = false;
+
+          for (const stageRule of STAGES as Array<{ key: string; rx: RegExp }>) {
+            const match = progressLine.match(stageRule.rx);
+            if (match) {
+              const value = Number(match[1]);
+              if (!Number.isNaN(value)) {
+                setPercent(Math.max(0, Math.min(100, value)));
               }
-              if (lastStageRef.current !== s.key) {
-                setStage(s.key);
-                lastStageRef.current = s.key;
-                log('stage set', { stage: s.key });
+              if (lastStageRef.current !== stageRule.key) {
+                setStage(stageRule.key);
+                lastStageRef.current = stageRule.key;
               }
-              matched = true;
+              matchedStage = true;
               break;
             }
           }
-          if (!matched) {
-            for (const s of STAGES as Array<{ key: string; rx: RegExp }>) {
-              if (line.includes(s.key)) {
-                if (lastStageRef.current !== s.key) {
-                  setStage(s.key);
-                  lastStageRef.current = s.key;
-                  log('stage inferred', { stage: s.key });
+
+          if (!matchedStage) {
+            for (const stageRule of STAGES as Array<{ key: string; rx: RegExp }>) {
+              if (progressLine.includes(stageRule.key)) {
+                if (lastStageRef.current !== stageRule.key) {
+                  setStage(stageRule.key);
+                  lastStageRef.current = stageRule.key;
                 }
-                matched = true;
+                matchedStage = true;
                 break;
               }
             }
           }
-          if (!matched && lastStageRef.current !== 'Проверка целостности') {
+
+          if (!matchedStage && lastStageRef.current !== 'Проверка целостности') {
             setStage('Проверка целостности');
             lastStageRef.current = 'Проверка целостности';
-            log('stage fallback', { stage: 'Проверка целостности' });
           }
         })
       );
 
-      unsubs.push(
-        await listen<string>('git-error', (e) => {
-          const payload = e?.payload ?? '';
+      unsubscribers.push(
+        await listen<string>('git-error', (event) => {
+          console.error('[pull] error:', event?.payload ?? '');
           setBusy(false);
           setStage('Ошибка');
-          log('event git-error', { payload });
         })
       );
 
-      unsubs.push(
+      unsubscribers.push(
         await listen<string>('git-complete', () => {
+          console.log('[pull] complete');
           setPercent(100);
           setStage('Завершение');
           setBusy(false);
-          log('event git-complete');
         })
       );
     };
 
     void wire();
     return () => {
-      for (const u of unsubs) u();
-      log('events unbound');
+      for (const unlisten of unsubscribers) unlisten();
     };
-  }, [log]);
+  }, []);
 
-  const handleStartUpdate = useCallback(async () => {
-    if (!gameDir) {
-      log('start aborted: no gameDir');
-      return;
-    }
+  const handleStartUpdate = useCallback(async (): Promise<void> => {
+    if (!gameDir) return;
+
     setDialogOpen(true);
     setStarted(true);
     setBusy(true);
@@ -162,19 +145,38 @@ const UpdateButton: React.FC = () => {
     lastStageRef.current = 'Инициализация';
 
     try {
-      log('resolve git path...');
       const gitPath = await resolveResource('portable-git/bin/git.exe');
-      log('git path', { gitPath });
-      log('invoke pull_repo', { repo_path: gameDir });
-      await invoke('pull_repo', { args: { git_path: gitPath, repo_path: gameDir } });
-      // завершение придёт через git-complete
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+
+      // reset + clean before pull
+      await invoke('reset_repository_hard', {
+        args: {
+          git_path: gitPath,
+          repository_path: gameDir,
+          hard_target: 'HEAD',
+        },
+      });
+
+      await invoke('clean_repository', {
+        args: {
+          git_path: gitPath,
+          repository_path: gameDir,
+          include_ignored: false,
+          pathspecs: null,
+        },
+      });
+
+      // pull with progress
+      await invoke('pull_repo', {
+        args: {
+          git_path: gitPath,
+          repo_path: gameDir,
+        },
+      });
+    } catch {
       setBusy(false);
       setStage('Ошибка');
-      log('invoke error', { message });
     }
-  }, [gameDir, log]);
+  }, [gameDir]);
 
   const renderPanel = useCallback(() => {
     if (!started) {
