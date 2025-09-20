@@ -1,7 +1,7 @@
 // app/hooks/useModsAudit.ts
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import axios from 'axios';
 import { invoke } from '@tauri-apps/api/core';
 import { useSelector } from 'react-redux';
@@ -9,43 +9,14 @@ import { RootState } from '@/store/configureStore';
 
 type LocalFile = { path: string; size: number; mtime_ms: number; sha256: string };
 type ManifestFile = { path: string; size: number; mtimeMs: number; sha256: string };
-type ModsManifest = {
-  generatedAt: string;
-  dirHash: string;
-  required: ManifestFile[];
-  optional: ManifestFile[];
-};
-
+type ModsManifest = { generatedAt: string; dirHash: string; required: ManifestFile[]; optional: ManifestFile[] };
 type ResolveItem = { path: string; size: number; sha256: string; url: string };
-type ResolveResponse = {
-  available: ResolveItem[];
-  missing: string[];
-  totalBytes: number;
-  totalCount: number;
-};
-
-type AuditResult = {
-  toDelete: string[];
-  toDownload: string[];
-  mismatched: string[];
-  totalDownloadBytes: number;
-  totalDownloadCount: number;
-};
-
-type ResolveResult = {
-  downloaded: string[];
-  missingOnServer: string[];
-};
-
-type DownloadPlannedResult = {
-  planned: string[];
-  downloaded: string[];
-  missingOnServer: string[];
-};
-
+type ResolveResponse = { available: ResolveItem[]; missing: string[]; totalBytes: number; totalCount: number };
+type AuditResult = { toDelete: string[]; toDownload: string[]; mismatched: string[]; totalDownloadBytes: number; totalDownloadCount: number };
+type ResolveResult = { downloaded: string[]; missingOnServer: string[] };
+type DownloadPlannedResult = { planned: string[]; downloaded: string[]; missingOnServer: string[] };
 type Status = 'idle' | 'hashing' | 'fetching' | 'diffing' | 'downloading' | 'ready' | 'error';
 
-// Build base URL from endpoint
 const buildBaseUrl = (endpoint: string | null | undefined): string => {
   if (!endpoint || endpoint.trim().length === 0) return '';
   let baseUrl = String(endpoint);
@@ -53,14 +24,11 @@ const buildBaseUrl = (endpoint: string | null | undefined): string => {
   return baseUrl.replace(/\/+$/, '');
 };
 
-// Path helpers
 const normalizePath = (inputPath: string): string => inputPath.replace(/\\/g, '/');
 const isJar = (filePath: string): boolean => /\.jar$/i.test(filePath);
 const isJarDisabled = (filePath: string): boolean => /\.jar\.disabled$/i.test(filePath);
 const toBaseName = (filePath: string): string => filePath.replace(/\.jar(\.disabled)?$/i, '');
 const baseKey = (filePath: string): string => toBaseName(normalizePath(filePath)).toLowerCase();
-
-// Version helpers
 const VERSION_TAIL_RE = /([-_.]v?\d[\w.+-]*)$/i;
 const toStem = (filePath: string): string => baseKey(filePath).replace(VERSION_TAIL_RE, '');
 const extractVersion = (filePath: string): string => {
@@ -68,20 +36,16 @@ const extractVersion = (filePath: string): string => {
   const match = key.match(VERSION_TAIL_RE);
   return match ? match[1].replace(/^[-_.]v?/i, '') : '';
 };
-
-// Compare versions token by token
 const compareVersions = (leftVersion: string, rightVersion: string): number => {
   const splitIntoTokens = (input: string) => input.split(/[^0-9A-Za-z]+/).filter(Boolean);
   const leftTokens = splitIntoTokens(leftVersion);
   const rightTokens = splitIntoTokens(rightVersion);
   const tokenCount = Math.max(leftTokens.length, rightTokens.length);
-
   for (let index = 0; index < tokenCount; index++) {
     const leftToken = leftTokens[index] ?? '';
     const rightToken = rightTokens[index] ?? '';
     const leftIsNumeric = /^\d+$/.test(leftToken);
     const rightIsNumeric = /^\d+$/.test(rightToken);
-
     if (leftIsNumeric && rightIsNumeric) {
       const leftNumber = Number(leftToken);
       const rightNumber = Number(rightToken);
@@ -96,7 +60,6 @@ const compareVersions = (leftVersion: string, rightVersion: string): number => {
 export const useModsAudit = () => {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
-
   const [toDelete, setToDelete] = useState<string[]>([]);
   const [toDownload, setToDownload] = useState<string[]>([]);
   const [mismatched, setMismatched] = useState<string[]>([]);
@@ -106,11 +69,14 @@ export const useModsAudit = () => {
   const activeEndPoint = useSelector((state: RootState) => state.settingsState.activeEndPoint);
   const { userLogin, userPassword } = useSelector((state: RootState) => state.authSlice);
 
+  const lastModsDirRef = useRef<string>(''); // stores modsDir from last runAudit
+
   const runAudit = useCallback(
     async (modsDir: string): Promise<AuditResult> => {
       const tStartAll = performance.now();
       setStatus('hashing');
       setError(null);
+      lastModsDirRef.current = modsDir;
 
       const baseUrl = buildBaseUrl(activeEndPoint);
       if (!baseUrl) {
@@ -119,9 +85,6 @@ export const useModsAudit = () => {
         return { toDelete: [], toDownload: [], mismatched: [], totalDownloadBytes: 0, totalDownloadCount: 0 };
       }
 
-      console.log('[mods-audit] start', { endpoint: baseUrl, modsDir });
-
-      // 1) Hash local files
       let localFiles: LocalFile[] = [];
       const tStartHash = performance.now();
       try {
@@ -131,17 +94,14 @@ export const useModsAudit = () => {
           if (isJar(file.path) || isJarDisabled(file.path)) filtered.push(file);
         }
         localFiles = filtered;
-        console.log('[mods-audit] local count:', localFiles.length);
       } catch (errorCaught) {
         setStatus('error');
         setError(`hash_mods failed: ${errorCaught instanceof Error ? errorCaught.message : String(errorCaught)}`);
-        console.log('[mods-audit] hash_mods error:', errorCaught);
         return { toDelete: [], toDownload: [], mismatched: [], totalDownloadBytes: 0, totalDownloadCount: 0 };
       } finally {
         console.log('[mods-audit] hash time ms:', Math.max(0, Math.round(performance.now() - tStartHash)));
       }
 
-      // 2) Fetch server manifest
       setStatus('fetching');
       let manifest: ModsManifest;
       const tStartFetch = performance.now();
@@ -151,30 +111,18 @@ export const useModsAudit = () => {
           timeout: 15000,
         });
         manifest = data;
-        console.log('[mods-audit] manifest sizes:', {
-          required: manifest.required.length,
-          optional: manifest.optional.length,
-        });
       } catch (errorCaught) {
         setStatus('error');
         setError(`manifest fetch failed: ${errorCaught instanceof Error ? errorCaught.message : String(errorCaught)}`);
-        console.log('[mods-audit] fetch manifest error:', errorCaught);
         return { toDelete: [], toDownload: [], mismatched: [], totalDownloadBytes: 0, totalDownloadCount: 0 };
       } finally {
         console.log('[mods-audit] manifest fetch time ms:', Math.max(0, Math.round(performance.now() - tStartFetch)));
       }
 
-      // 3) Diff
       setStatus('diffing');
       const tStartDiff = performance.now();
 
-      type ServerEntry = {
-        manifestFile: ManifestFile;
-        base: string;
-        stem: string;
-        version: string;
-        kind: 'required' | 'optional';
-      };
+      type ServerEntry = { manifestFile: ManifestFile; base: string; stem: string; version: string; kind: 'required' | 'optional' };
 
       const requiredEntries: ServerEntry[] = manifest.required.map((manifestFile) => ({
         manifestFile,
@@ -183,7 +131,6 @@ export const useModsAudit = () => {
         version: extractVersion(manifestFile.path),
         kind: 'required',
       }));
-
       const optionalEntries: ServerEntry[] = manifest.optional.map((manifestFile) => ({
         manifestFile,
         base: baseKey(manifestFile.path),
@@ -191,7 +138,6 @@ export const useModsAudit = () => {
         version: extractVersion(manifestFile.path),
         kind: 'optional',
       }));
-
       const allServerEntries: ServerEntry[] = [...requiredEntries, ...optionalEntries];
 
       const bestByStem = new Map<string, ServerEntry>();
@@ -240,21 +186,17 @@ export const useModsAudit = () => {
       const nextMismatched: string[] = [];
       let bytesToDownload = 0;
 
-      // Required
       for (const baseName of requiredBases) {
         const serverMeta = requiredByBase.get(baseName);
         if (!serverMeta) continue;
-
         const enabledLocal = localEnabledByBase.get(baseName);
         const disabledLocal = localDisabledByBase.get(baseName);
-
         if (!enabledLocal) {
           nextToDownload.push(serverMeta.path);
           bytesToDownload += serverMeta.size;
           if (disabledLocal) nextToDelete.push(disabledLocal.path);
           continue;
         }
-
         if (enabledLocal.sha256 !== serverMeta.sha256 || enabledLocal.size !== serverMeta.size) {
           nextMismatched.push(serverMeta.path);
           nextToDelete.push(enabledLocal.path);
@@ -262,17 +204,13 @@ export const useModsAudit = () => {
         }
       }
 
-      // Optional
       for (const baseName of optionalBases) {
         const serverMeta = optionalByBase.get(baseName);
         if (!serverMeta) continue;
-
         const enabledLocal = localEnabledByBase.get(baseName);
         const disabledLocal = localDisabledByBase.get(baseName);
-
         if (!enabledLocal && disabledLocal) continue;
         if (!enabledLocal) continue;
-
         if (enabledLocal.sha256 !== serverMeta.sha256 || enabledLocal.size !== serverMeta.size) {
           nextMismatched.push(serverMeta.path);
           nextToDelete.push(enabledLocal.path);
@@ -280,7 +218,6 @@ export const useModsAudit = () => {
         }
       }
 
-      // Unknown families
       for (const baseName of localAllBases) {
         const isKnown = requiredBases.has(baseName) || optionalBases.has(baseName);
         if (!isKnown) {
@@ -291,7 +228,6 @@ export const useModsAudit = () => {
         }
       }
 
-      // Keep only server-best per stem
       for (const baseName of localAllBases) {
         const stem = baseName.replace(VERSION_TAIL_RE, '');
         if (!serverStems.has(stem)) continue;
@@ -335,7 +271,6 @@ export const useModsAudit = () => {
       if (!baseUrl || !userLogin || !userPassword || filePaths.length === 0) {
         return { downloaded: [], missingOnServer: [] };
       }
-
       try {
         setStatus('fetching');
         const { data } = await axios.post<ResolveResponse>(
@@ -344,9 +279,6 @@ export const useModsAudit = () => {
           { withCredentials: true, timeout: 20000 }
         );
 
-        console.log('[mods-download] plan', { totalBytes: data.totalBytes, totalCount: data.totalCount });
-
-        // Ensure overwrite by pre-deleting target names
         const overwriteTargets = Array.from(new Set((data.available ?? []).map((item) => item.path)));
         if (overwriteTargets.length > 0) {
           try {
@@ -358,7 +290,6 @@ export const useModsAudit = () => {
 
         setStatus('downloading');
         const downloadedFiles: string[] = [];
-
         for (const item of data.available ?? []) {
           try {
             await invoke('download_mod_file', {
@@ -375,10 +306,7 @@ export const useModsAudit = () => {
         }
 
         setStatus('ready');
-        return {
-          downloaded: downloadedFiles,
-          missingOnServer: Array.isArray(data.missing) ? data.missing : [],
-        };
+        return { downloaded: downloadedFiles, missingOnServer: Array.isArray(data.missing) ? data.missing : [] };
       } catch (errorCaught) {
         setStatus('error');
         setError(errorCaught instanceof Error ? errorCaught.message : String(errorCaught));
@@ -394,11 +322,21 @@ export const useModsAudit = () => {
       for (const pathToFile of toDownload) plannedSet.add(pathToFile);
       for (const pathToFile of mismatched) plannedSet.add(pathToFile);
       const planned = Array.from(plannedSet);
-
       const { downloaded, missingOnServer } = await resolveAndDownload(modsDir, planned);
       return { planned, downloaded, missingOnServer };
     },
     [toDownload, mismatched, resolveAndDownload]
+  );
+
+  // Backward-compatible API for existing callers (e.g., BulkModDownloader)
+  const downloadSelected = useCallback(
+    async (files: string[]): Promise<ResolveResult> => {
+      const modsDir = lastModsDirRef.current;
+      if (!modsDir) return { downloaded: [], missingOnServer: [] };
+      const uniqueFiles = Array.from(new Set(files));
+      return resolveAndDownload(modsDir, uniqueFiles);
+    },
+    [resolveAndDownload]
   );
 
   return {
@@ -412,6 +350,7 @@ export const useModsAudit = () => {
     runAudit,
     resolveAndDownload,
     downloadPlanned,
+    downloadSelected,
   };
 };
 
