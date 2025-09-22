@@ -85,6 +85,7 @@ export const useModsAudit = () => {
         return { toDelete: [], toDownload: [], mismatched: [], totalDownloadBytes: 0, totalDownloadCount: 0 };
       }
 
+      // 1) Хеширование локальных модов
       let localFiles: LocalFile[] = [];
       const tStartHash = performance.now();
       try {
@@ -102,6 +103,33 @@ export const useModsAudit = () => {
         console.log('[mods-audit] hash time ms:', Math.max(0, Math.round(performance.now() - tStartHash)));
       }
 
+      // ЛОГ: локальные файлы
+      const localEnabled = localFiles.filter(f => isJar(f.path));
+      const localDisabled = localFiles.filter(f => isJarDisabled(f.path));
+      console.log('[mods-audit] local mods overview:', {
+        modsDir,
+        totalLocal: localFiles.length,
+        enabledCount: localEnabled.length,
+        disabledCount: localDisabled.length,
+        enabled: localEnabled.map(f => ({
+          path: f.path,
+          size: f.size,
+          sha256: f.sha256,
+          base: baseKey(f.path),
+          stem: toStem(f.path),
+          version: extractVersion(f.path),
+        })),
+        disabled: localDisabled.map(f => ({
+          path: f.path,
+          size: f.size,
+          sha256: f.sha256,
+          base: baseKey(f.path),
+          stem: toStem(f.path),
+          version: extractVersion(f.path),
+        })),
+      });
+
+      // 2) Получаем манифест
       setStatus('fetching');
       let manifest: ModsManifest;
       const tStartFetch = performance.now();
@@ -119,19 +147,44 @@ export const useModsAudit = () => {
         console.log('[mods-audit] manifest fetch time ms:', Math.max(0, Math.round(performance.now() - tStartFetch)));
       }
 
+      // ЛОГ: серверный манифест
+      console.log('[mods-audit] server manifest:', {
+        generatedAt: manifest.generatedAt,
+        dirHash: manifest.dirHash,
+        requiredCount: manifest.required?.length ?? 0,
+        optionalCount: manifest.optional?.length ?? 0,
+        required: (manifest.required ?? []).map(m => ({
+          path: m.path,
+          size: m.size,
+          sha256: m.sha256,
+          base: baseKey(m.path),
+          stem: toStem(m.path),
+          version: extractVersion(m.path),
+        })),
+        optional: (manifest.optional ?? []).map(m => ({
+          path: m.path,
+          size: m.size,
+          sha256: m.sha256,
+          base: baseKey(m.path),
+          stem: toStem(m.path),
+          version: extractVersion(m.path),
+        })),
+      });
+
+      // 3) Дифф
       setStatus('diffing');
       const tStartDiff = performance.now();
 
       type ServerEntry = { manifestFile: ManifestFile; base: string; stem: string; version: string; kind: 'required' | 'optional' };
 
-      const requiredEntries: ServerEntry[] = manifest.required.map((manifestFile) => ({
+      const requiredEntries: ServerEntry[] = (manifest.required ?? []).map((manifestFile) => ({
         manifestFile,
         base: baseKey(manifestFile.path),
         stem: toStem(manifestFile.path),
         version: extractVersion(manifestFile.path),
         kind: 'required',
       }));
-      const optionalEntries: ServerEntry[] = manifest.optional.map((manifestFile) => ({
+      const optionalEntries: ServerEntry[] = (manifest.optional ?? []).map((manifestFile) => ({
         manifestFile,
         base: baseKey(manifestFile.path),
         stem: toStem(manifestFile.path),
@@ -139,6 +192,20 @@ export const useModsAudit = () => {
         kind: 'optional',
       }));
       const allServerEntries: ServerEntry[] = [...requiredEntries, ...optionalEntries];
+
+      // ЛОГ: исходный список серверных записей
+      console.log('[mods-audit] server entries (pre-bestByStem):', {
+        total: allServerEntries.length,
+        items: allServerEntries.map(e => ({
+          kind: e.kind,
+          path: e.manifestFile.path,
+          size: e.manifestFile.size,
+          sha256: e.manifestFile.sha256,
+          base: e.base,
+          stem: e.stem,
+          version: e.version,
+        })),
+      });
 
       const bestByStem = new Map<string, ServerEntry>();
       for (const serverEntry of allServerEntries) {
@@ -155,6 +222,17 @@ export const useModsAudit = () => {
           }
         }
       }
+
+      // ЛОГ: лучший выбор по stem
+      console.log('[mods-audit] bestByStem:', Array.from(bestByStem.entries()).map(([stem, entry]) => ({
+        stem,
+        kind: entry.kind,
+        path: entry.manifestFile.path,
+        base: entry.base,
+        version: entry.version,
+        size: entry.manifestFile.size,
+        sha256: entry.manifestFile.sha256,
+      })));
 
       const requiredByBase = new Map<string, ManifestFile>();
       const optionalByBase = new Map<string, ManifestFile>();
@@ -180,6 +258,16 @@ export const useModsAudit = () => {
           localAllBases.add(key);
         }
       }
+
+      // ЛОГ: индексы локальных и серверных
+      console.log('[mods-audit] indices overview:', {
+        requiredBases: Array.from(requiredBases),
+        optionalBases: Array.from(optionalBases),
+        serverStems: Array.from(serverStems),
+        localEnabledBases: Array.from(localEnabledByBase.keys()),
+        localDisabledBases: Array.from(localDisabledByBase.keys()),
+        localAllBases: Array.from(localAllBases),
+      });
 
       const nextToDelete: string[] = [];
       const nextToDownload: string[] = [];
@@ -242,6 +330,15 @@ export const useModsAudit = () => {
       }
 
       const deduplicatedDelete = Array.from(new Set(nextToDelete));
+
+      // ЛОГ: финальные списки
+      console.log('[mods-audit] results:', {
+        toDelete: deduplicatedDelete,
+        toDownload: nextToDownload,
+        mismatched: nextMismatched,
+        totalDownloadBytes: bytesToDownload,
+        totalDownloadCount: nextToDownload.length + nextMismatched.length,
+      });
 
       setToDelete(deduplicatedDelete);
       setToDownload(nextToDownload);

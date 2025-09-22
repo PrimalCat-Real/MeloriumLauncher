@@ -166,7 +166,7 @@ const UpdateButton: React.FC = () => {
       });
 
       // pull with progress
-      await invoke('pull_repo', {
+      await invoke('pull_repo_with_fallback', {
         args: {
           git_path: gitPath,
           repo_path: gameDir,

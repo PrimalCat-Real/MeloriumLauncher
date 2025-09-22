@@ -8,6 +8,7 @@ version = "0.0.13"
 dependencies = [
  "bcrypt",
  "dotenvy",
+ "elevated_process",
  "globset",
  "ignore",
  "log",
@@ -1015,6 +1016,33 @@ name = "either"
 version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
+
+[[package]]
+name = "elevated-command"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54c410eccdcc5b759704fdb6a792afe6b01ab8a062e2c003ff2567e2697a94aa"
+dependencies = [
+ "anyhow",
+ "base64 0.21.7",
+ "libc",
+ "log",
+ "winapi",
+ "windows 0.52.0",
+]
+
+[[package]]
+name = "elevated_process"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8684dced165def2550a4bdf999d145db3e915d87d427cb7d220139b54bfef58"
+dependencies = [
+ "anyhow",
+ "elevated-command",
+ "thiserror 2.0.12",
+ "tokio",
+ "tokio-util",
+]
 
 [[package]]
 name = "embed-resource"
