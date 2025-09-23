@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Melorium",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "identifier": "primalcat.melorium",
   "build": {
     "frontendDist": "../out",
@@ -15,6 +15,7 @@
         "title": "Melorium",
         "width": 1000,
         "height": 640,
+        "backgroundColor": "#DB66FF", 
         "resizable": false,
         "fullscreen": false,
         "decorations": false,

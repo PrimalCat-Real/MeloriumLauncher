@@ -14,10 +14,13 @@ const Header = () => {
     <header data-tauri-drag-region className='w-full h-12 flex justify-between items-center px-4 bg-header-bg border-b border-border/20 relative z-10'>
         <Logo></Logo>
         <div className='flex gap-4 items-center'>
+          
+          <ModsDrawer></ModsDrawer>
+          <Logout></Logout>
           <MinimizaButton className='h-8 w-8'></MinimizaButton>
           <CloseButton className='h-8 w-8'></CloseButton>
-            <ModsDrawer></ModsDrawer>
-          <Logout></Logout>
+          
+          
         </div>
     </header>
   )

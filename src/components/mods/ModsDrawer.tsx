@@ -67,9 +67,9 @@ const ModsDrawer: React.FC = () => {
               </Button>
 
               <div className="flex gap-2 items-center">
+                <Logout />
                 <MinimizaButton className="h-8 w-8" />
                 <CloseButton className="h-8 w-8" />
-                <Logout />
               </div>
             </div>
 
