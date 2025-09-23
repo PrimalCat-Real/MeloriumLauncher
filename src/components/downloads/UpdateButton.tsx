@@ -5,18 +5,20 @@ import React, { lazy, memo, Suspense, useCallback, useEffect, useRef, useState }
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@/store/configureStore';
 import { resolveResource } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { STAGES } from '@/lib/utils';
+import { changeDownloadStatus } from '@/store/slice/downloadSlice';
 
 const ProgressPanel = lazy(() => import('@/components/shared/ProgressPanel'));
 
 const UpdateButton: React.FC = () => {
   const gameDir = useSelector((state: RootState) => state.downloadSlice.gameDir);
 
+  const dispatch = useDispatch();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [started, setStarted] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -172,7 +174,10 @@ const UpdateButton: React.FC = () => {
           repo_path: gameDir,
         },
       });
-    } catch {
+
+      dispatch(changeDownloadStatus('downloaded'));
+    } catch(e) {
+      console.error('[pull] failed:', e);
       setBusy(false);
       setStage('Ошибка');
     }

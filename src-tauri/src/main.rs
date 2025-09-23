@@ -17,7 +17,7 @@ mod rungame;
 use rungame::launch_minecraft;
 
 mod git;
-use git::{pull_repo, reset_repo, clean_repository, reset_repository_hard};
+use git::{pull_repo, reset_repo, clean_repository, reset_repository_hard, pull_repo_with_fallback };
 
 mod mods;
 use mods::{delete_extra_files, download_mod_file, hash_mods};
@@ -133,7 +133,8 @@ fn main() {
             delete_extra_files,
             reset_repo,
             clean_repository,
-            reset_repository_hard
+            reset_repository_hard,
+            pull_repo_with_fallback 
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");
