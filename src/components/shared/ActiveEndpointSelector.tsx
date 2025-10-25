@@ -18,13 +18,14 @@ const ping = async (url: string, timeoutMs = 2000): Promise<Response> => {
 
 type EndpointKey = keyof typeof SERVER_ENDPOINTS
 
+const endpoint = 'launcher/check-connect'
 const ActiveEndpointSelector = () => {
   const dispatch = useDispatch()
 
   const checkAndPick = useCallback(async () => {
     const endpoints: { key: EndpointKey; url: string }[] = [
-      { key: 'main', url: `${SERVER_ENDPOINTS.main}/check-connect` },
-      { key: 'proxy', url: `http://188.225.24.31:8001/check-connect` },
+      { key: 'main', url: `${SERVER_ENDPOINTS.main}/${endpoint}` },
+      { key: 'proxy', url: `http://188.225.24.31:8081/check-connect` },
     ]
 
     // create controllers so we can abort remaining requests after first success
@@ -61,11 +62,11 @@ const ActiveEndpointSelector = () => {
         try { c.abort() } catch { /* noop */ }
       })
 
-      let chosenBase = (winner as { key: EndpointKey; base: string }).base
+      
       const chosenKey = (winner as { key: EndpointKey; base: string }).key
-
+      let chosenBase = SERVER_ENDPOINTS[chosenKey]
       // log if proxy won
-      console.log("chosenKey", chosenKey, chosenBase)
+      console.log("chosenKey", chosenKey, SERVER_ENDPOINTS.main)
       if (chosenKey === 'proxy') {
         chosenBase = SERVER_ENDPOINTS.proxy;
         console.log('Proxy responded first. Winner endpoint:', chosenBase)

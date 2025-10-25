@@ -1,0 +1,343 @@
+import { useState, useCallback } from 'react';
+import axios from 'axios';
+import { join } from '@tauri-apps/api/path';
+import { invoke } from '@tauri-apps/api/core';
+import { remove, mkdir, exists, readDir, rename } from '@tauri-apps/plugin-fs';
+
+interface FileEntry {
+  path: string;
+  hash: string;
+  size: number;
+  url: string;
+  optional: boolean;
+  dependencies?: string[];
+}
+
+interface LauncherManifest {
+  version: string;
+  timestamp: number;
+  totalSize: number;
+  files: FileEntry[];
+  optionalDirectories?: string[]; // Опциональные директории для игнорирования
+}
+
+interface SyncResult {
+  toDownload: FileEntry[];
+  toUpdate: FileEntry[];
+  toDelete: string[];
+  toDisable: string[];
+  upToDate: string[];
+  skipped: string[];
+}
+
+export function useFileSync() {
+  const [isComparing, setIsComparing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, total: 0, percent: 0 });
+
+  const isInMeloriamFolder = useCallback((path: string): boolean => {
+    return path.startsWith('Melorium/');
+  }, []);
+
+  const isModFile = useCallback((path: string): boolean => {
+    return path.startsWith('Melorium/mods/') && (path.endsWith('.jar') || path.endsWith('.jar.disabled'));
+  }, []);
+
+  /**
+   * Проверяет, находится ли файл в игнорируемой опциональной директории
+   */
+  const isInIgnoredDirectory = useCallback((filePath: string, ignoredDirs: string[]): boolean => {
+    for (const dir of ignoredDirs) {
+      if (filePath.startsWith(dir)) {
+        return true;
+      }
+    }
+    return false;
+  }, []);
+
+  const compareFiles = useCallback((
+    localHashes: Record<string, string>,
+    serverManifest: LauncherManifest,
+    localVersion?: string,
+    serverVersion?: string
+  ): SyncResult => {
+    setIsComparing(true);
+
+    const result: SyncResult = {
+      toDownload: [],
+      toUpdate: [],
+      toDelete: [],
+      toDisable: [],
+      upToDate: [],
+      skipped: [],
+    };
+
+    try {
+      const requiredFiles = serverManifest.files.filter(f => !f.optional);
+      const optionalFiles = serverManifest.files.filter(f => f.optional);
+
+      // TODO: В будущем получать это из конфига/манифеста
+      // Пока заглушка - пустой массив
+      const ignoredDirectories: string[] = serverManifest.optionalDirectories || [];
+      // Примеры: ['Melorium/shaderpacks/', 'Melorium/resourcepacks/']
+
+      console.log('\n=== COMPARISON START ===');
+      console.log('Local version:', localVersion || 'none');
+      console.log('Server version:', serverVersion || serverManifest.version);
+      console.log('Required files:', requiredFiles.length);
+      console.log('Optional files:', optionalFiles.length);
+      console.log('Ignored directories:', ignoredDirectories);
+
+      const versionUnchanged = localVersion === serverVersion || localVersion === serverManifest.version;
+      
+      if (versionUnchanged) {
+        console.log('Version unchanged, will skip non-Melorium files');
+      }
+
+      const localHashMap = new Map(Object.entries(localHashes));
+      const serverFileMap = new Map(
+        serverManifest.files.map(f => [f.path, f])
+      );
+
+      // Обрабатываем обязательные файлы
+      for (const file of requiredFiles) {
+        const inMelorium = isInMeloriamFolder(file.path);
+        
+        if (versionUnchanged && !inMelorium) {
+          result.skipped.push(file.path);
+          continue;
+        }
+
+        const localHash = localHashMap.get(file.path);
+
+        if (!localHash) {
+          result.toDownload.push(file);
+        } else if (localHash !== file.hash) {
+          result.toUpdate.push(file);
+          console.log(`[MISMATCH] ${file.path}`);
+          console.log(`  Local:  ${localHash.substring(0, 16)}...`);
+          console.log(`  Server: ${file.hash.substring(0, 16)}...`);
+        } else {
+          result.upToDate.push(file.path);
+        }
+      }
+
+      // Обрабатываем опциональные моды
+      for (const file of optionalFiles) {
+        if (!isModFile(file.path)) continue;
+
+        const normalPath = file.path;
+        const hasNormal = localHashMap.has(normalPath);
+
+        // Проверяем зависимости
+        if (file.dependencies && file.dependencies.length > 0) {
+          const missingDeps: string[] = [];
+          
+          for (const depPath of file.dependencies) {
+            const depFile = serverFileMap.get(depPath);
+            if (!depFile) continue;
+
+            const depNormalPath = depPath;
+            
+            // Зависимость должна быть включена (не .disabled)
+            if (!localHashMap.has(depNormalPath)) {
+              missingDeps.push(depPath);
+            }
+          }
+
+          // Если есть недостающие зависимости и мод включен - отключаем его
+          if (missingDeps.length > 0 && hasNormal) {
+            result.toDisable.push(normalPath);
+            console.log(`[DISABLE] ${normalPath} - missing dependencies:`, missingDeps);
+          }
+        }
+      }
+
+      // Проверяем лишние локальные файлы
+      for (const localPath of localHashMap.keys()) {
+        const inMelorium = isInMeloriamFolder(localPath);
+        
+        // Пропускаем .disabled файлы
+        if (localPath.endsWith('.disabled')) continue;
+        
+        // Пропускаем файлы в игнорируемых директориях
+        if (isInIgnoredDirectory(localPath, ignoredDirectories)) {
+          console.log(`[IGNORED] ${localPath} - in optional directory`);
+          continue;
+        }
+        
+        if (inMelorium && !serverFileMap.has(localPath)) {
+          const serverFile = serverManifest.files.find(f => f.path === localPath);
+          
+          // Удаляем только если это не опциональный файл
+          if (!serverFile || !serverFile.optional) {
+            result.toDelete.push(localPath);
+          }
+        }
+      }
+
+      console.log('\n=== SUMMARY ===');
+      console.log(`Download: ${result.toDownload.length}`);
+      console.log(`Update:   ${result.toUpdate.length}`);
+      console.log(`Delete:   ${result.toDelete.length}`);
+      console.log(`Disable:  ${result.toDisable.length}`);
+      console.log(`Up-to-date: ${result.upToDate.length}`);
+      console.log(`Skipped: ${result.skipped.length}`);
+      console.log('===============\n');
+
+    } catch (e) {
+      console.error('Comparison failed:', e);
+      throw e;
+    } finally {
+      setIsComparing(false);
+    }
+
+    return result;
+  }, [isInMeloriamFolder, isModFile, isInIgnoredDirectory]);
+
+  const downloadFile = useCallback(async (
+    file: FileEntry,
+    serverUrl: string,
+    gameDir: string,
+    authToken?: string
+  ): Promise<void> => {
+    const fullUrl = `${serverUrl}${file.url}`;
+    const localPath = await join(gameDir, file.path);
+
+    const dirPath = localPath.substring(0, localPath.lastIndexOf('/'));
+    const dirExists = await exists(dirPath);
+    if (!dirExists) {
+      await mkdir(dirPath, { recursive: true });
+    }
+
+    const response = await axios.get(fullUrl, {
+      responseType: 'arraybuffer',
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    });
+
+    await invoke('write_file_bytes', {
+      path: localPath,
+      data: Array.from(new Uint8Array(response.data))
+    });
+  }, []);
+
+  const deleteFile = useCallback(async (
+    filePath: string,
+    gameDir: string
+  ): Promise<void> => {
+    const localPath = await join(gameDir, filePath);
+    await invoke('delete_file', { path: localPath });
+    console.log(`[deleted] ${filePath}`);
+  }, []);
+
+  const disableMod = useCallback(async (
+    filePath: string,
+    gameDir: string
+  ): Promise<void> => {
+    const localPath = await join(gameDir, filePath);
+    const disabledPath = `${localPath}.disabled`;
+    
+    const fileExists = await exists(localPath);
+    if (fileExists) {
+      await rename(localPath, disabledPath);
+      console.log(`[disabled] ${filePath} -> ${filePath}.disabled`);
+    }
+  }, []);
+
+  const syncFiles = useCallback(async (
+    syncResult: SyncResult,
+    serverUrl: string,
+    gameDir: string,
+    authToken?: string
+  ): Promise<void> => {
+    setIsSyncing(true);
+
+    try {
+      const totalOperations = 
+        syncResult.toDownload.length + 
+        syncResult.toUpdate.length + 
+        syncResult.toDelete.length +
+        syncResult.toDisable.length;
+
+      if (totalOperations === 0) {
+        console.log('[sync] Nothing to sync');
+        return;
+      }
+
+      let currentOperation = 0;
+
+      console.log('\n=== SYNC START ===');
+
+      // 1. Отключаем моды с недостающими зависимостями
+      if (syncResult.toDisable.length > 0) {
+        console.log(`[sync] Disabling ${syncResult.toDisable.length} mods...`);
+        
+        for (const filePath of syncResult.toDisable) {
+          await disableMod(filePath, gameDir);
+          currentOperation++;
+          const percent = Math.round((currentOperation / totalOperations) * 100);
+          setProgress({ current: currentOperation, total: totalOperations, percent });
+          console.log(`[sync] Progress: ${percent}% (${currentOperation}/${totalOperations})`);
+        }
+      }
+
+      // 2. Скачиваем новые файлы
+      if (syncResult.toDownload.length > 0) {
+        console.log(`[sync] Downloading ${syncResult.toDownload.length} files...`);
+        
+        for (const file of syncResult.toDownload) {
+          await downloadFile(file, serverUrl, gameDir, authToken);
+          currentOperation++;
+          const percent = Math.round((currentOperation / totalOperations) * 100);
+          setProgress({ current: currentOperation, total: totalOperations, percent });
+          console.log(`[sync] Progress: ${percent}% (${currentOperation}/${totalOperations})`);
+        }
+      }
+
+      // 3. Обновляем изменённые файлы
+      if (syncResult.toUpdate.length > 0) {
+        console.log(`[sync] Updating ${syncResult.toUpdate.length} files...`);
+        
+        for (const file of syncResult.toUpdate) {
+          await deleteFile(file.path, gameDir);
+          await downloadFile(file, serverUrl, gameDir, authToken);
+          currentOperation++;
+          const percent = Math.round((currentOperation / totalOperations) * 100);
+          setProgress({ current: currentOperation, total: totalOperations, percent });
+          console.log(`[sync] Progress: ${percent}% (${currentOperation}/${totalOperations})`);
+        }
+      }
+
+      // 4. Удаляем лишние файлы (не в игнорируемых директориях)
+      if (syncResult.toDelete.length > 0) {
+        console.log(`[sync] Deleting ${syncResult.toDelete.length} files...`);
+        
+        for (const filePath of syncResult.toDelete) {
+          await deleteFile(filePath, gameDir);
+          currentOperation++;
+          const percent = Math.round((currentOperation / totalOperations) * 100);
+          setProgress({ current: currentOperation, total: totalOperations, percent });
+          console.log(`[sync] Progress: ${percent}% (${currentOperation}/${totalOperations})`);
+        }
+      }
+
+      console.log('[sync] Synchronization completed successfully');
+      console.log('=================\n');
+
+    } catch (error) {
+      console.error('[sync] Synchronization failed:', error);
+      throw error;
+    } finally {
+      setIsSyncing(false);
+      setProgress({ current: 0, total: 0, percent: 0 });
+    }
+  }, [downloadFile, deleteFile, disableMod]);
+
+  return {
+    compareFiles,
+    syncFiles,
+    isComparing,
+    isSyncing,
+    progress,
+  };
+}

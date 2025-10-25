@@ -5,6 +5,7 @@ import ActiveEndpointSelector from '@/components/shared/ActiveEndpointSelector'
 import { useSelector } from 'react-redux'
 import { RootState } from '@/store/configureStore'
 import { getVersion } from '@tauri-apps/api/app'
+import { SERVER_ENDPOINTS } from '@/lib/config'
 
 const Footer = () => {
   const activeEndPoint = useSelector((state: RootState) => state.settingsState.activeEndPoint)
@@ -28,7 +29,7 @@ const Footer = () => {
     <div className='absolute bottom-0 left-0 w-full grid grid-cols-3 px-4 py-2 opacity-15 text-sm'>
 
       <span>{currentVersion && currentVersion}</span>
-      <span className='text-center'>{activeEndPoint === "http://148.251.176.5:8000" ? "main" : "proxy"}</span> 
+      <span className='text-center'>{activeEndPoint === SERVER_ENDPOINTS.main ? "main" : "proxy"}</span> 
       <span className='text-right'>{baseDir && baseDir}</span>
 
     </div>

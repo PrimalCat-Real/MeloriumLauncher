@@ -2,103 +2,87 @@
 
 import { MinecraftLaunchParams, useMinecraftLaunch } from '@/hooks/useMinecraftLaunch'
 import { RootState } from '@/store/configureStore';
-import React, { useEffect, useState } from 'react'
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useCallback, useMemo, useState } from 'react'
+import { useSelector } from 'react-redux';
 import { Button } from '../ui/button';
-import { join, resolveResource } from '@tauri-apps/api/path';
-import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { LoaderCircle } from 'lucide-react';
-import { deleteFiles, getPublicIp, whitelistIp } from '@/lib/utils';
-import { useModsAudit } from '@/hooks/useModsAudit';
+import { getPublicIp, whitelistIp } from '@/lib/utils';
+import { useLocalFileHashes } from '@/hooks/useLocalFileHashes';
+import { useManifest } from '@/hooks/useManifest';
+import { useFileSync } from '@/hooks/useFileSync';
 
 interface LauncStatus {
-  status: "verify" | "idle" | "launching", 
+  status: "verify" | "idle" | "launching" | "syncing", 
   message?: string
 }
 
 const LaunchButton = () => {
-    const dispatch = useDispatch();
-    const { activeEndPoint } = useSelector((s: RootState) => s.settingsState);
+    const { scanDirectory, isScanning } = useLocalFileHashes();
+    const { fetchManifest, isLoading: isLoadingManifest } = useManifest();
+    const { compareFiles, syncFiles, isSyncing, progress } = useFileSync();
+    
+    const [launchStatus, setLaunchStatus] = useState<LauncStatus>({status: "idle"})
+    
+    const activeEndPoint = useSelector((s: RootState) => s.settingsState.activeEndPoint);
+    const userLogin = useSelector((state: RootState) => state.authSlice.userLogin);
+    const userPassword = useSelector((state: RootState) => state.authSlice.userPassword);
+    const gameDir = useSelector((state: RootState) => state.downloadSlice.gameDir);
+    const javaMemory = useSelector((state: RootState) => state.settingsState.javaMemory);
+    const authToken = useSelector((state: RootState) => state.authSlice.authToken);
+    const localVersion = useSelector((state: RootState) => state.downloadSlice.localVersion)
+    const serverVersion = useSelector((state: RootState) => state.downloadSlice.serverVersion)
+    const ignoredPaths = useSelector((state: RootState) => state.downloadSlice.ignoredPaths);
+    const userUuid = useMemo(() => crypto.randomUUID(), []);
 
-    const { runAudit, resolveAndDownload } = useModsAudit();
-    const [launchStatus, setLaunchStatus]  = useState<LauncStatus>({status: "idle"})
-    const { userLogin, userUuid, userPassword } = useSelector(
-      (state: RootState) => state.authSlice
-    );
-    const gameDir = useSelector((state: RootState) => state.downloadSlice.gameDir)
-    console.log("Game Directory:", gameDir);
-    const javaMemory = useSelector((state: RootState) => state.settingsState.javaMemory)
-    const gameParams: MinecraftLaunchParams = {
+    const gameParams: MinecraftLaunchParams = useMemo(() => ({
         baseDir: gameDir,
         username: userLogin,
         uuid: userUuid,
         token: userPassword,
         memoryMb: javaMemory
-    }
+    }), [gameDir, userLogin, userUuid, userPassword, javaMemory]);
 
-     const fireAndForget = (p: Promise<any>) => {
+    const fireAndForget = useCallback((p: Promise<any>) => {
       p.catch((e) => console.warn("[whitelist] failed:", e));
-    };
-    const handleLaunch = async () => {
+    }, []);
+
+    const handleLaunch = useCallback(async () => {
         try {
-          
           setLaunchStatus({status: "verify"})
-          const gitPath = await resolveResource("portable-git/bin/git.exe");
-          // const taskId = crypto.randomUUID();
-          // await invoke("reset_repo", {
-          //   args: {
-          //     git_path: gitPath,
-          //     repo_path: gameDir,
-          //   },
-          // });
+          
+          const localHashes = await scanDirectory(gameDir);
+          console.log('[launch] Local files scanned');
+          
+          const serverManifest = await fetchManifest(activeEndPoint, authToken);
+          console.log('[launch] Server manifest received');
+          
+          const manifestWithIgnored = {
+              ...serverManifest,
+              optionalDirectories: ignoredPaths
+          };
+          const syncResult = compareFiles(
+              localHashes,
+              manifestWithIgnored,
+              localVersion || undefined,
+              serverVersion || undefined
+          )
 
-          await invoke("reset_repository_hard", {
-            args: {
-              git_path: gitPath,
-              repository_path: gameDir,
-              hard_target: "HEAD",
-            },
-          });
+          const hasChanges = 
+            syncResult.toDownload.length > 0 ||
+            syncResult.toUpdate.length > 0 ||
+            syncResult.toDelete.length > 0;
 
-          await invoke("clean_repository", {
-              args: {
-                git_path: gitPath,
-                repository_path: gameDir,
-                include_ignored: false,
-                pathspecs: null,
-              },
-          });
-
-          const modsDir = await join(gameDir, 'Melorium', 'mods');
-          const audit = await runAudit(modsDir);
-          console.log('[launch] audit:', audit);
-
-          if (audit.toDelete.length > 0) {
-            // baseDir должен соответствовать корню, относительно которого лежит modsDir
-            const deleted = await deleteFiles(modsDir, audit.toDelete);
-            console.log('[launch] deleted:', deleted);
+          if (hasChanges) {
+            setLaunchStatus({status: "syncing"});
+            await syncFiles(syncResult, activeEndPoint, gameDir, authToken);
+            console.log('[launch] Files synchronized');
+          } else {
+            console.log('[launch] No changes, all files up to date');
           }
-          const planned = Array.from(new Set([...audit.toDownload, ...audit.mismatched]));
-          console.log('[launch] planned to download:', planned);
-
-          const { downloaded, missingOnServer: unavailableOnServer } =
-            await resolveAndDownload(modsDir, planned);
-
-          console.log('[launch] downloaded:', downloaded);
-          if (unavailableOnServer.length > 0) {
-            console.warn('[launch] unavailable on server:', unavailableOnServer);
-          }
-          // await deleteExtras();
-          // const wanted = [...audit.toDownload, ...audit.mismatched];
-
-          // console.log('[launch] wanted total:', wanted.length);
-          // if (wanted.length > 0) {
-          //   const { downloadedCount, missingOnServer } = await downloadSelected(wanted);
-          //   console.log('[launch] downloadedCount:', downloadedCount, 'missing:', missingOnServer);
-          // }
+          
           setLaunchStatus({status: "launching"})
-          // // setLaunching(true)
+          
           if (activeEndPoint && userLogin && userPassword) {
             fireAndForget(
               (async () => {
@@ -113,30 +97,71 @@ const LaunchButton = () => {
           }
 
           await useMinecraftLaunch(gameParams);
+          
         } catch (err) {
           toast.error("Не удалось проверить файлы", {
             description: String(err),
           });
+        } finally {
+          setLaunchStatus({status: "idle"})
         }
-        setLaunchStatus({status: "idle"})
-        // setLaunching(false)
+    }, [
+      scanDirectory, 
+      gameDir, 
+      fetchManifest,
+      activeEndPoint, 
+      authToken,
+      compareFiles,
+      syncFiles,
+      localVersion,
+      serverVersion,
+      userLogin, 
+      userPassword, 
+      gameParams, 
+      fireAndForget
+    ]);
 
-    }
-  return (
-    <Button disabled={launchStatus.status == "verify" || launchStatus.status == "launching"} onClick={handleLaunch}>
-      {launchStatus.status == "launching" && (<>
-        <LoaderCircle className="h-4 w-4 animate-spin"  /> <span>Запуск</span>
-      </>)}
-      {launchStatus.status == "verify" && (
-        <>
-        <LoaderCircle className="h-4 w-4 animate-spin" />
-        <span>Проверка</span>
-        </>
-        )}
-      {launchStatus.status == "idle" && (<span>Играть</span>)}
-    </Button>
-  )
-  
+    const isDisabled = useMemo(() => 
+      launchStatus.status !== "idle" || isScanning || isSyncing,
+      [launchStatus.status, isScanning, isSyncing]
+    );
+
+    const buttonContent = useMemo(() => {
+      if (launchStatus.status === "launching") {
+        return (
+          <>
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            <span>Запуск</span>
+          </>
+        );
+      }
+      
+      if (launchStatus.status === "syncing") {
+        return (
+          <>
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            <span className='text-sm'>{progress.percent}%</span>
+          </>
+        );
+      }
+      
+      if (launchStatus.status === "verify") {
+        return (
+          <>
+            <LoaderCircle className="h-4 w-4 animate-spin" />
+            <span>Проверка</span>
+          </>
+        );
+      }
+      
+      return <span>Играть</span>;
+    }, [launchStatus.status, progress.percent]);
+
+    return (
+      <Button disabled={isDisabled} onClick={handleLaunch}>
+        {buttonContent}
+      </Button>
+    );
 }
 
 export default LaunchButton

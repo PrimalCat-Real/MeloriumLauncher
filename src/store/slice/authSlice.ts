@@ -1,40 +1,48 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit"
 
 export interface UserAuth {
-  userLogin: string;
-  userPassword: string;
-  donateTokens: number;
-  userUuid: string;
+  authToken: string | null
+  username: string
   authStatus: boolean
+  userLogin: string
+  userPassword: string
 }
 
 
 const initialState: UserAuth = {
+  authToken: null,
+  username: "",
+  authStatus: false,
   userLogin: "",
   userPassword: "",
-  donateTokens: 0,
-  userUuid: "",
-  authStatus: false
 }
 
+
 const authSlice = createSlice({
-    name: 'auth',
-    initialState,
-    reducers: {
-        setUserData: (state, action: PayloadAction<UserAuth>) => {
-            state.userLogin = action.payload.userLogin;
-            state.userPassword = action.payload.userPassword;
-            state.donateTokens = action.payload.donateTokens;
-            state.userUuid = action.payload.userUuid;
-            state.authStatus = action.payload.authStatus;
-        },
-        setCredentials: (state, action: PayloadAction<{ userLogin: string; userPassword: string }>) => {
-          state.userLogin = action.payload.userLogin;
-          state.userPassword = action.payload.userPassword;
-        },
-        clearAuthData: () => initialState,
-    }
+  name: 'auth',
+  initialState,
+  reducers: {
+    setUserData: (state, action: PayloadAction<Partial<UserAuth>>) => {
+      return { ...state, ...action.payload }
+    },
+    setCredentials: (state, action: PayloadAction<{ userLogin: string; userPassword: string }>) => {
+      state.userLogin = action.payload.userLogin
+      state.userPassword = action.payload.userPassword
+    },
+    
+    setAuthToken: (state, action: PayloadAction<string>) => {
+      state.authToken = action.payload
+    },
+  
+    clearAuthData: () => initialState,
+  }
 })
 
-export const { setUserData, setCredentials, clearAuthData } = authSlice.actions;
-export default authSlice.reducer;
+export const { 
+  setUserData, 
+  setCredentials, 
+  setAuthToken, 
+  clearAuthData 
+} = authSlice.actions
+
+export default authSlice.reducer

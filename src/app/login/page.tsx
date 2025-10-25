@@ -39,113 +39,119 @@ const LoginPage = () => {
   }, [userLogin, userPassword, isInitialized])
   
   
-  type LoginInput = { login: string; password: string };
-  type LoginRessult = {
-    uuid: string;
-    is_active: boolean;
-    tokens: number;
-  };
+  type LoginInput = { 
+    username: string
+    password: string 
+  }
+  
+  type LoginResult = {
+    token: string
+    tokenType: string
+    username: string
+  }
 
  const loginRequest = useCallback(
-    async ({ login, password }: LoginInput): Promise<LoginRessult> => {
+    async ({ username, password }: LoginInput): Promise<LoginResult> => {
       const { data } = await axios.post(
-        `${activeEndPoint}/login`,
-        { login, password },
-        { withCredentials: true }
+        `${activeEndPoint}/auth/signin`,
+        { username, password },
+        {
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        }
       )
       return data
     },
     [activeEndPoint]
   )
 
-  const mutation = useMutation({ mutationFn: loginRequest, retry: false });
+  const mutation = useMutation({ 
+    mutationFn: loginRequest, 
+    retry: false 
+  })
 
-   const handleLogin = async () => {
-    // setLoading(true)
-
+  const handleLogin = async () => {
     if (username === 'test' && password === 'test') {
       dispatch(
         setUserData({
-          userUuid: 'e8a18932-c201-493a-b1b0-85853c19fde6',
+          authToken: 'test-token', // Mock token
           authStatus: true,
           userLogin: username,
           userPassword: password,
-          donateTokens: 99999
         })
-      );
-      toast.success('Вход выполнен успешно!', { description: 'Вы вошли как тестовый пользователь.' });
-      // alert("login")
-      // router.push('/')
-      router.replace('/');
-      
-      return;
+      )
+      toast.success('Вход выполнен успешно!', { 
+        description: 'Вы вошли как тестовый пользователь.' 
+      })
+      router.replace('/')
+      return
     }
 
+    // Real authentication
     mutation.mutate(
-      { login: username, password },
+      { username, password },
       {
         onSuccess: (data) => {
+          axios.defaults.headers.common['Authorization'] = `Bearer ${data.token}`
+  
+          localStorage.setItem('authToken', data.token)
+          // Save token and credentials to Redux
           dispatch(
             setUserData({
-              // userSessionToken: data.tokens.toString(),
-              userUuid: data.uuid,
+              authToken: data.token,          // JWT token
               authStatus: true,
               userLogin: username,
-              userPassword: password,
-              donateTokens: data.tokens
+              userPassword: password,         // Save for auto-login
             })
-          );
+          )
           
-          router.replace('/');
+          toast.success('Вход выполнен успешно!', {
+            description: `Добро пожаловать, ${data.username}!`
+          })
+          
+          router.replace('/')
         },
         onError: (err: any) => {
-          toast.error('Ошибка входа', { description: err?.response?.data?.error });
+          const errorMessage = err?.response?.data?.message 
+            || err?.response?.data 
+            || 'Неверный логин или пароль'
+          
+          toast.error('Ошибка входа', { 
+            description: errorMessage 
+          })
         },
       }
-    );
-    
-    // const res = await fetch('http://localhost:8000');
-    // if (!res.ok) throw new Error('Network error');
-    // return res.json();
-    // try {
-    //   const result = await useAuth(username, password)
-    //   if (result.is_authenticated && result.accesstoken && result.uuid) {
-    //     dispatch(setUserData({
-    //       userSessionToken: result.accesstoken,
-    //       userUuid: result.uuid,
-    //       authStatus: true,
-    //       userLogin: username,
-    //       userPassword: password
-    //     }))
-    //     router.replace('/')
-    //   } else {
-    //     toast.error("Ошибка авторизации", {
-    //       description: result.error || "Неизвестная ошибка",
-    //     })
-    //   }
-    // } catch (err: any) {
-    //   toast.error("Системная ошибка", {
-    //     description: err?.message || String(err),
-    //   })
-    // } finally {
-    //   setLoading(false)
-    // }
+    )
   }
 
   const handleUsernameInput = (event: React.ChangeEvent<HTMLInputElement>) => {
     setUsername(event.target.value)
   }
+  
   const handlePasswordInput = (event: React.ChangeEvent<HTMLInputElement>) => {
     setPassword(event.target.value)
   }
 
   const handleFormSubmit = useCallback(
     (event: React.FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      handleLogin();
+      event.preventDefault()
+      
+      // Validation
+      if (!username.trim()) {
+        toast.error('Ошибка', { description: 'Введите логин' })
+        return
+      }
+      if (!password.trim()) {
+        toast.error('Ошибка', { description: 'Введите пароль' })
+        return
+      }
+      
+      handleLogin()
     },
-    [handleLogin]
-  );
+    [username, password, handleLogin]
+  )
+
   return (
     <div className="relative min-h-full ">
         <form

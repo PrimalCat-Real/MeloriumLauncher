@@ -18,10 +18,18 @@
     "updater:default",
     "process:default",
     "fs:read-all",
+    "fs:write-all",
     "fs:allow-remove",
     "fs:allow-exists",
+    "fs:allow-stat",
+    "fs:allow-mkdir",
+    "fs:allow-write-file",
+    "fs:default",
+    "fs:allow-read-file",
+    "fs:allow-read-dir",
     { "identifier": "fs:allow-remove", "allow": [{ "path": "**" }] },
+    { "identifier": "fs:allow-write-file", "allow": [{ "path": "**" }] },
+    { "identifier": "fs:allow-mkdir", "allow": [{ "path": "**" }] },
     { "identifier": "fs:scope", "allow": ["**"] }
-    
   ]
 }

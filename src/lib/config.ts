@@ -9,9 +9,9 @@ export const FILES_TO_SKIP_WORKTREE = [
 ];
 
 export const SERVER_ENDPOINTS = {
-  main: "http://148.251.176.5:8000",
-  proxy: "http://188.225.24.31:8000"
+  main: "http://localhost:8080",
+  proxy: "http://188.225.24.31:8080"
 }
 
-export const GDRIVE_FILE_ID = "1DehtRS6MCsGVFDN5v8ycZkgSaOL_GKkk"
+export const GDRIVE_FILE_ID = "16TvYKt7D0gXnOZ-t6UwFeCkdiQ3_WsK1"
 export const GDRIVE_API_KEY = "AIzaSyDmiWk-x_VXqCfkvQv8fWD39yf3bjVFQys"

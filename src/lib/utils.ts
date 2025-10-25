@@ -101,8 +101,9 @@ export async function getPlayerSystemInfo() {
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import axios from "axios";
-import { BaseDirectory, remove } from "@tauri-apps/plugin-fs";
+import { BaseDirectory, exists, readTextFile, remove } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
+import { LocalMeloriamConfig, VersionResponse } from "@/types/utils";
 
 async function checkAndUpdate(toaster: typeof toast) {
   try {
@@ -210,3 +211,43 @@ export const deleteFiles = async (rootDir: string,
   // }
   // return count;
 // }
+
+export const getLocalVersion = async (baseDir: string): Promise<string | null> => {
+    try {
+        if (!baseDir) return null;
+        
+        const meloriamJsonPath = await join(baseDir, 'melorium.json');
+        const fileExists = await exists(meloriamJsonPath);
+        
+        if (!fileExists) {
+            console.log('Local melorium.json not found');
+            return null;
+        }
+
+        const content = await readTextFile(meloriamJsonPath);
+        const config: LocalMeloriamConfig = JSON.parse(content);
+        
+        console.log('Local version:', config.version);
+        return config.version;
+    } catch (error) {
+        console.error('Failed to read local version:', error);
+        return null;
+    }
+};
+
+export const getServerVersion = async (versionUrl: string, authToken?: string | null): Promise<VersionResponse | null> => {
+    try {
+        const { data } = await axios.get<VersionResponse>(versionUrl, {
+            headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
+        });
+        
+        console.log('Server version:', data.version);
+        return data;
+    } catch (error) {
+        if (axios.isAxiosError(error) && error.response?.status === 401) {
+            throw error;
+        }
+        console.error('Failed to fetch server version:', error);
+        return null;
+    }
+};

@@ -93,3 +93,36 @@ pub async fn list_mod_jar_files(mods_path: String) -> Result<Vec<String>, String
     }
     Ok(jar_files)
 }
+
+
+#[tauri::command]
+pub async fn write_file_bytes(path: String, data: Vec<u8>) -> Result<(), String> {
+    use tokio::fs;
+    use std::path::Path;
+
+    if let Some(parent) = Path::new(&path).parent() {
+        fs::create_dir_all(parent)
+            .await
+            .map_err(|e| format!("Failed to create directories: {}", e))?;
+    }
+    
+    fs::write(&path, data)
+        .await
+        .map_err(|e| format!("Failed to write file: {}", e))?;
+    
+    Ok(())
+}
+#[tauri::command]
+pub async fn delete_file(path: String) -> Result<(), String> {
+    use tokio::fs;
+    use std::path::Path;
+
+    let p = Path::new(&path);
+    if p.exists() {
+        fs::remove_file(&path)
+            .await
+            .map_err(|e| format!("Failed to delete file: {}", e))?;
+    }
+    
+    Ok(())
+}

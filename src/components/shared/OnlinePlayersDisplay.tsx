@@ -28,14 +28,20 @@ const fetchStatus = async (endpoint: string): Promise<StatusPayload> => {
   try {
     const url = buildUrl(endpoint)
     const { data } = await axios.get<StatusPayload>(url, { timeout: 5000 })
-    // валидация формы ответа
-    if (!data || typeof data.status !== 'string' || !data.players) return OFFLINE_FALLBACK
+    
+    if (!data || typeof data.status !== 'string' || !data.players) {
+      return OFFLINE_FALLBACK
+    }
     return data
-  } catch {
-    // не бросаем — отдаем оффлайн, UI не падает
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      throw error; // Interceptor обработает
+    }
+    
     return OFFLINE_FALLBACK
   }
 }
+
 
 const suspenseify = <T,>(promise: Promise<T>) => {
   let status: 'pending' | 'success' = 'pending'
