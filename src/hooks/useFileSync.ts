@@ -3,6 +3,7 @@ import axios from 'axios';
 import { join } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
 import { remove, mkdir, exists, readDir, rename } from '@tauri-apps/plugin-fs';
+import { matchesIgnoredPath } from '@/lib/glob-utils';
 
 interface FileEntry {
   path: string;
@@ -18,7 +19,6 @@ interface LauncherManifest {
   timestamp: number;
   totalSize: number;
   files: FileEntry[];
-  optionalDirectories?: string[]; // Опциональные директории для игнорирования
 }
 
 interface SyncResult {
@@ -44,20 +44,19 @@ export function useFileSync() {
   }, []);
 
   /**
-   * Проверяет, находится ли файл в игнорируемой опциональной директории
+   * Проверяет, является ли файл опциональным модом на сервере
    */
-  const isInIgnoredDirectory = useCallback((filePath: string, ignoredDirs: string[]): boolean => {
-    for (const dir of ignoredDirs) {
-      if (filePath.startsWith(dir)) {
-        return true;
-      }
-    }
-    return false;
+  const isOptionalMod = useCallback((filePath: string, serverFileMap: Map<string, FileEntry>): boolean => {
+    // Убираем .disabled если есть
+    const normalPath = filePath.replace(/\.disabled$/, '');
+    const serverFile = serverFileMap.get(normalPath);
+    return serverFile?.optional || false;
   }, []);
 
   const compareFiles = useCallback((
     localHashes: Record<string, string>,
     serverManifest: LauncherManifest,
+    ignoredPaths: string[],
     localVersion?: string,
     serverVersion?: string
   ): SyncResult => {
@@ -76,17 +75,12 @@ export function useFileSync() {
       const requiredFiles = serverManifest.files.filter(f => !f.optional);
       const optionalFiles = serverManifest.files.filter(f => f.optional);
 
-      // TODO: В будущем получать это из конфига/манифеста
-      // Пока заглушка - пустой массив
-      const ignoredDirectories: string[] = serverManifest.optionalDirectories || [];
-      // Примеры: ['Melorium/shaderpacks/', 'Melorium/resourcepacks/']
-
       console.log('\n=== COMPARISON START ===');
       console.log('Local version:', localVersion || 'none');
       console.log('Server version:', serverVersion || serverManifest.version);
       console.log('Required files:', requiredFiles.length);
       console.log('Optional files:', optionalFiles.length);
-      console.log('Ignored directories:', ignoredDirectories);
+      console.log('Ignored patterns:', ignoredPaths);
 
       const versionUnchanged = localVersion === serverVersion || localVersion === serverManifest.version;
       
@@ -102,6 +96,13 @@ export function useFileSync() {
       // Обрабатываем обязательные файлы
       for (const file of requiredFiles) {
         const inMelorium = isInMeloriamFolder(file.path);
+        
+        // Пропускаем файлы в игнорируемых путях (glob patterns)
+        if (matchesIgnoredPath(file.path, ignoredPaths)) {
+          console.log(`[IGNORED] ${file.path} - matches ignored pattern`);
+          result.skipped.push(file.path);
+          continue;
+        }
         
         if (versionUnchanged && !inMelorium) {
           result.skipped.push(file.path);
@@ -127,10 +128,20 @@ export function useFileSync() {
         if (!isModFile(file.path)) continue;
 
         const normalPath = file.path;
+        const disabledPath = `${file.path}.disabled`;
+        
         const hasNormal = localHashMap.has(normalPath);
+        const hasDisabled = localHashMap.has(disabledPath);
 
-        // Проверяем зависимости
-        if (file.dependencies && file.dependencies.length > 0) {
+        // Если мод отключен (.disabled) - НЕ трогаем его
+        if (hasDisabled && !hasNormal) {
+          console.log(`[SKIP] ${disabledPath} - optional mod is disabled by user`);
+          result.skipped.push(disabledPath);
+          continue;
+        }
+
+        // Проверяем зависимости только если мод включен
+        if (hasNormal && file.dependencies && file.dependencies.length > 0) {
           const missingDeps: string[] = [];
           
           for (const depPath of file.dependencies) {
@@ -145,8 +156,8 @@ export function useFileSync() {
             }
           }
 
-          // Если есть недостающие зависимости и мод включен - отключаем его
-          if (missingDeps.length > 0 && hasNormal) {
+          // Если есть недостающие зависимости - отключаем мод
+          if (missingDeps.length > 0) {
             result.toDisable.push(normalPath);
             console.log(`[DISABLE] ${normalPath} - missing dependencies:`, missingDeps);
           }
@@ -157,15 +168,23 @@ export function useFileSync() {
       for (const localPath of localHashMap.keys()) {
         const inMelorium = isInMeloriamFolder(localPath);
         
-        // Пропускаем .disabled файлы
-        if (localPath.endsWith('.disabled')) continue;
+        // ВАЖНО: Пропускаем .disabled файлы - они управляются пользователем
+        if (localPath.endsWith('.disabled')) {
+          // Проверяем, является ли это опциональным модом
+          const normalPath = localPath.replace(/\.disabled$/, '');
+          if (isOptionalMod(normalPath, serverFileMap)) {
+            console.log(`[SKIP] ${localPath} - disabled optional mod, user choice`);
+            continue;
+          }
+        }
         
-        // Пропускаем файлы в игнорируемых директориях
-        if (isInIgnoredDirectory(localPath, ignoredDirectories)) {
-          console.log(`[IGNORED] ${localPath} - in optional directory`);
+        // Пропускаем файлы в игнорируемых путях (glob patterns)
+        if (matchesIgnoredPath(localPath, ignoredPaths)) {
+          console.log(`[IGNORED] ${localPath} - matches ignored pattern`);
           continue;
         }
         
+        // Удаляем лишние файлы только в папке Melorium
         if (inMelorium && !serverFileMap.has(localPath)) {
           const serverFile = serverManifest.files.find(f => f.path === localPath);
           
@@ -193,7 +212,7 @@ export function useFileSync() {
     }
 
     return result;
-  }, [isInMeloriamFolder, isModFile, isInIgnoredDirectory]);
+  }, [isInMeloriamFolder, isModFile, isOptionalMod]);
 
   const downloadFile = useCallback(async (
     file: FileEntry,
@@ -277,7 +296,6 @@ export function useFileSync() {
           currentOperation++;
           const percent = Math.round((currentOperation / totalOperations) * 100);
           setProgress({ current: currentOperation, total: totalOperations, percent });
-          console.log(`[sync] Progress: ${percent}% (${currentOperation}/${totalOperations})`);
         }
       }
 
@@ -290,7 +308,6 @@ export function useFileSync() {
           currentOperation++;
           const percent = Math.round((currentOperation / totalOperations) * 100);
           setProgress({ current: currentOperation, total: totalOperations, percent });
-          console.log(`[sync] Progress: ${percent}% (${currentOperation}/${totalOperations})`);
         }
       }
 
@@ -304,11 +321,10 @@ export function useFileSync() {
           currentOperation++;
           const percent = Math.round((currentOperation / totalOperations) * 100);
           setProgress({ current: currentOperation, total: totalOperations, percent });
-          console.log(`[sync] Progress: ${percent}% (${currentOperation}/${totalOperations})`);
         }
       }
 
-      // 4. Удаляем лишние файлы (не в игнорируемых директориях)
+      // 4. Удаляем лишние файлы
       if (syncResult.toDelete.length > 0) {
         console.log(`[sync] Deleting ${syncResult.toDelete.length} files...`);
         
@@ -317,7 +333,6 @@ export function useFileSync() {
           currentOperation++;
           const percent = Math.round((currentOperation / totalOperations) * 100);
           setProgress({ current: currentOperation, total: totalOperations, percent });
-          console.log(`[sync] Progress: ${percent}% (${currentOperation}/${totalOperations})`);
         }
       }
 

@@ -201,6 +201,7 @@ const ModsTable: React.FC = () => {
           const isDisabled = fileName.endsWith('.jar.disabled')
           const baseFileName = isDisabled ? fileName.replace(/\.disabled$/, '') : fileName
           const modMatch = mods.find((mod) => mod.file === baseFileName)
+          // console.log('Found mod file:', fileName, 'Matched mod:', modMatch?.id)
           if (modMatch) {
             const shouldBeEnabled = !isDisabled
             newEnabledMap[modMatch.id] = shouldBeEnabled

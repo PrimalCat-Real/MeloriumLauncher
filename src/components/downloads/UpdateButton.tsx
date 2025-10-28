@@ -1,43 +1,47 @@
-// components/update/UpdateButton.tsx
 'use client';
 
-import React, { lazy, memo, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import React, { memo, Suspense, useCallback, useMemo, useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@/store/configureStore';
-import { resolveResource } from '@tauri-apps/api/path';
-import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { STAGES } from '@/lib/utils';
-import { changeDownloadStatus } from '@/store/slice/downloadSlice';
+import { changeDownloadStatus, setVersions } from '@/store/slice/downloadSlice';
+import { useLocalFileHashes } from '@/hooks/useLocalFileHashes';
+import { useManifest } from '@/hooks/useManifest';
+import { useFileSync } from '@/hooks/useFileSync';
+import { toast } from 'sonner';
+import { LoaderCircle } from 'lucide-react';
 
-const ProgressPanel = lazy(() => import('@/components/shared/ProgressPanel'));
+interface UpdateStatus {
+  stage: 'idle' | 'scanning' | 'comparing' | 'syncing' | 'complete' | 'error';
+  message?: string;
+  progress?: number;
+}
 
 const UpdateButton: React.FC = () => {
-  const gameDir = useSelector((state: RootState) => state.downloadSlice.gameDir);
-
   const dispatch = useDispatch();
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [started, setStarted] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [percent, setPercent] = useState(0);
-  const [stage, setStage] = useState('Ожидание');
+  
+  const gameDir = useSelector((state: RootState) => state.downloadSlice.gameDir);
+  const activeEndPoint = useSelector((s: RootState) => s.settingsState.activeEndPoint);
+  const authToken = useSelector((state: RootState) => state.authSlice.authToken);
+  const localVersion = useSelector((state: RootState) => state.downloadSlice.localVersion);
+  const serverVersion = useSelector((state: RootState) => state.downloadSlice.serverVersion);
+  const ignoredPaths = useSelector((state: RootState) => state.downloadSlice.ignoredPaths);
 
-  const lastStageRef = useRef<string>('');
-  const lastProgressLogTsRef = useRef<number>(0);
+  const { scanDirectory, isScanning, progress: scanProgress } = useLocalFileHashes();
+  const { fetchManifest, isLoading: isLoadingManifest } = useManifest();
+  const { compareFiles, syncFiles, isSyncing, progress: syncProgress } = useFileSync();
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ stage: 'idle' });
 
   const handleOpenDialog = useCallback(() => {
     setDialogOpen(true);
   }, []);
 
   const resetState = useCallback((): void => {
-    setStarted(false);
-    setBusy(false);
-    setPercent(0);
-    setStage('Ожидание');
-    lastStageRef.current = '';
+    setUpdateStatus({ stage: 'idle' });
   }, []);
 
   const handleDialogOpenChange = useCallback(
@@ -48,180 +52,258 @@ const UpdateButton: React.FC = () => {
     [resetState]
   );
 
-  useEffect(() => {
-    const unsubscribers: UnlistenFn[] = [];
-
-    const wire = async (): Promise<void> => {
-      unsubscribers.push(
-        await listen<string>('git-start', () => {
-          console.log('[pull] start');
-          setStarted(true);
-          setBusy(true);
-          setPercent(0);
-          setStage('Инициализация');
-          lastStageRef.current = 'Инициализация';
-        })
-      );
-
-      unsubscribers.push(
-        await listen<string>('git-progress', (event) => {
-          const progressLine = String(event.payload || '');
-          const nowTs = performance.now();
-
-          console.log('[pull]', progressLine);
-
-          if (nowTs - lastProgressLogTsRef.current > 300) {
-            lastProgressLogTsRef.current = nowTs;
-          }
-
-          let matchedStage = false;
-
-          for (const stageRule of STAGES as Array<{ key: string; rx: RegExp }>) {
-            const match = progressLine.match(stageRule.rx);
-            if (match) {
-              const value = Number(match[1]);
-              if (!Number.isNaN(value)) {
-                setPercent(Math.max(0, Math.min(100, value)));
-              }
-              if (lastStageRef.current !== stageRule.key) {
-                setStage(stageRule.key);
-                lastStageRef.current = stageRule.key;
-              }
-              matchedStage = true;
-              break;
-            }
-          }
-
-          if (!matchedStage) {
-            for (const stageRule of STAGES as Array<{ key: string; rx: RegExp }>) {
-              if (progressLine.includes(stageRule.key)) {
-                if (lastStageRef.current !== stageRule.key) {
-                  setStage(stageRule.key);
-                  lastStageRef.current = stageRule.key;
-                }
-                matchedStage = true;
-                break;
-              }
-            }
-          }
-
-          if (!matchedStage && lastStageRef.current !== 'Проверка целостности') {
-            setStage('Проверка целостности');
-            lastStageRef.current = 'Проверка целостности';
-          }
-        })
-      );
-
-      unsubscribers.push(
-        await listen<string>('git-error', (event) => {
-          console.error('[pull] error:', event?.payload ?? '');
-          setBusy(false);
-          setStage('Ошибка');
-        })
-      );
-
-      unsubscribers.push(
-        await listen<string>('git-complete', () => {
-          console.log('[pull] complete');
-          setPercent(100);
-          setStage('Завершение');
-          setBusy(false);
-        })
-      );
-    };
-
-    void wire();
-    return () => {
-      for (const unlisten of unsubscribers) unlisten();
-    };
-  }, []);
-
   const handleStartUpdate = useCallback(async (): Promise<void> => {
-    if (!gameDir) return;
-
-    setDialogOpen(true);
-    setStarted(true);
-    setBusy(true);
-    setPercent(0);
-    setStage('Инициализация');
-    lastStageRef.current = 'Инициализация';
+    if (!gameDir || !activeEndPoint) {
+      toast.error('Не указана директория игры или сервер');
+      return;
+    }
 
     try {
-      const gitPath = await resolveResource('portable-git/bin/git.exe');
+      // 1. Сканирование локальных файлов
+      setUpdateStatus({ stage: 'scanning', message: 'Сканирование файлов...' });
+      console.log('[update] Scanning local files...');
+      
+      const localHashes = await scanDirectory(gameDir);
+      console.log('[update] Local files scanned:', Object.keys(localHashes).length);
 
-      // reset + clean before pull
-      await invoke('reset_repository_hard', {
-        args: {
-          git_path: gitPath,
-          repository_path: gameDir,
-          hard_target: 'HEAD',
-        },
+      // 2. Получение полного манифеста с сервера (все файлы, не только Melorium)
+      setUpdateStatus({ stage: 'comparing', message: 'Получение списка файлов с сервера...' });
+      console.log('[update] Fetching full manifest from server...');
+      
+      const serverManifest = await fetchManifest(activeEndPoint, authToken);
+      console.log('[update] Server manifest received:', {
+        version: serverManifest.version,
+        files: serverManifest.files.length,
+        totalSize: serverManifest.totalSize
       });
 
-      await invoke('clean_repository', {
-        args: {
-          git_path: gitPath,
-          repository_path: gameDir,
-          include_ignored: false,
-          pathspecs: null,
-        },
+      // 3. Сравнение файлов (БЕЗ фильтрации по версии - обновляем все!)
+      setUpdateStatus({ stage: 'comparing', message: 'Сравнение файлов...' });
+      console.log('[update] Comparing files...');
+      
+      const safeIgnoredPaths = Array.isArray(ignoredPaths) ? ignoredPaths : [];
+      
+      // ВАЖНО: передаем undefined для localVersion и serverVersion 
+      // чтобы compareFiles обновлял ВСЕ файлы, а не только Melorium
+      const syncResult = compareFiles(
+        localHashes,
+        serverManifest,
+        safeIgnoredPaths,
+        undefined, // Не передаем localVersion - обновляем все
+        undefined  // Не передаем serverVersion - обновляем все
+      );
+
+      const hasChanges = 
+        syncResult.toDownload.length > 0 ||
+        syncResult.toUpdate.length > 0 ||
+        syncResult.toDelete.length > 0 ||
+        syncResult.toDisable.length > 0;
+
+      console.log('[update] Changes detected:', {
+        toDownload: syncResult.toDownload.length,
+        toUpdate: syncResult.toUpdate.length,
+        toDelete: syncResult.toDelete.length,
+        toDisable: syncResult.toDisable.length,
+        hasChanges
       });
 
-      // pull with progress
-      await invoke('pull_repo_with_fallback', {
-        args: {
-          git_path: gitPath,
-          repo_path: gameDir,
-        },
+      if (!hasChanges) {
+        console.log('[update] No changes needed');
+        setUpdateStatus({ 
+          stage: 'complete', 
+          message: 'Все файлы актуальны',
+          progress: 100 
+        });
+        
+        toast.success('Обновление не требуется', {
+          description: 'Все файлы уже актуальны'
+        });
+        
+        setTimeout(() => {
+          setDialogOpen(false);
+          resetState();
+        }, 2000);
+        
+        return;
+      }
+
+      // 4. Синхронизация файлов
+      setUpdateStatus({ 
+        stage: 'syncing', 
+        message: 'Обновление файлов...',
+        progress: 0 
+      });
+      console.log('[update] Starting file synchronization...');
+
+      await syncFiles(syncResult, activeEndPoint, gameDir, authToken);
+
+      // 5. Обновление версии в store
+      dispatch(setVersions({
+        local: serverManifest.version,
+        server: serverManifest.version
+      }));
+
+      console.log('[update] Update completed successfully');
+      setUpdateStatus({ 
+        stage: 'complete', 
+        message: 'Обновление завершено',
+        progress: 100 
       });
 
+      toast.success('Обновление завершено', {
+        description: `Версия ${serverManifest.version}`
+      });
+
+      // Меняем статус скачивания
       dispatch(changeDownloadStatus('downloaded'));
-    } catch(e) {
-      console.error('[pull] failed:', e);
-      setBusy(false);
-      setStage('Ошибка');
-    }
-  }, [gameDir]);
 
-  const renderPanel = useCallback(() => {
-    if (!started) {
+      // Закрываем диалог через 2 секунды
+      setTimeout(() => {
+        setDialogOpen(false);
+        resetState();
+      }, 2000);
+
+    } catch (error) {
+      console.error('[update] Update failed:', error);
+      setUpdateStatus({ 
+        stage: 'error', 
+        message: String(error) 
+      });
+      
+      toast.error('Ошибка обновления', {
+        description: String(error)
+      });
+    }
+  }, [
+    gameDir, 
+    activeEndPoint, 
+    authToken, 
+    ignoredPaths,
+    scanDirectory, 
+    fetchManifest, 
+    compareFiles, 
+    syncFiles,
+    dispatch,
+    resetState
+  ]);
+
+  const canStart = useMemo(
+    () => Boolean(gameDir) && updateStatus.stage === 'idle',
+    [gameDir, updateStatus.stage]
+  );
+
+  const isBusy = useMemo(
+    () => updateStatus.stage !== 'idle' && updateStatus.stage !== 'complete' && updateStatus.stage !== 'error',
+    [updateStatus.stage]
+  );
+
+  const progressPercent = useMemo(() => {
+    if (updateStatus.stage === 'scanning') {
+      return scanProgress.total > 0 
+        ? Math.round((scanProgress.current / scanProgress.total) * 100)
+        : 0;
+    }
+    if (updateStatus.stage === 'syncing') {
+      return syncProgress.percent;
+    }
+    if (updateStatus.stage === 'complete') {
+      return 100;
+    }
+    return updateStatus.progress || 0;
+  }, [updateStatus, scanProgress, syncProgress]);
+
+  const statusMessage = useMemo(() => {
+    switch (updateStatus.stage) {
+      case 'scanning':
+        return `Сканирование: ${scanProgress.current} / ${scanProgress.total}`;
+      case 'comparing':
+        return 'Сравнение файлов...';
+      case 'syncing':
+        return `Синхронизация: ${syncProgress.current} / ${syncProgress.total}`;
+      case 'complete':
+        return 'Завершено!';
+      case 'error':
+        return `Ошибка: ${updateStatus.message}`;
+      default:
+        return 'Готово к обновлению';
+    }
+  }, [updateStatus, scanProgress, syncProgress]);
+
+  const renderDialogContent = useCallback(() => {
+    if (updateStatus.stage === 'idle') {
       return (
-        <ProgressPanel
-          mode="setup"
-          title="Обновление"
-          setup={{
-            selectedPath: undefined,
-            onPickPath: undefined,
-            onStart: handleStartUpdate,
-            canStart: Boolean(gameDir) && !busy,
-            startLabel: 'Обновить',
-            hidePathPicker: true,
-          }}
-        />
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <h3 className="text-lg font-semibold">Обновление игры</h3>
+            <p className="text-sm text-muted-foreground">
+              Будут проверены и обновлены все файлы клиента, включая библиотеки и ресурсы Minecraft.
+            </p>
+            {localVersion && serverVersion && (
+              <div className="text-sm space-y-1">
+                <p>Текущая версия: <span className="font-mono">{localVersion}</span></p>
+                <p>Версия на сервере: <span className="font-mono">{serverVersion}</span></p>
+              </div>
+            )}
+          </div>
+          <Button 
+            onClick={handleStartUpdate} 
+            disabled={!canStart}
+            className="w-full"
+          >
+            Начать обновление
+          </Button>
+        </div>
       );
     }
+
     return (
-      <ProgressPanel
-        mode="progress"
-        title="Обновление"
-        stage={stage}
-        percent={percent}
-        eta={stage}
-        leftLabel="Статус"
-        showLeftPercent={false}
-        speed={`${percent}%`}
-        rightLabel=""
-        hideRightSlot={false}
-        hideTransferStats={false}
-      />
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <h3 className="text-lg font-semibold">Обновление игры</h3>
+          <div className="flex items-center gap-2">
+            {isBusy && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            <span className="text-sm text-muted-foreground">{statusMessage}</span>
+          </div>
+        </div>
+        
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>Прогресс</span>
+            <span className="font-mono">{progressPercent}%</span>
+          </div>
+          <div className="h-2 bg-secondary rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-primary transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        </div>
+
+        {updateStatus.stage === 'complete' && (
+          <p className="text-sm text-green-600">
+            Обновление успешно завершено!
+          </p>
+        )}
+
+        {updateStatus.stage === 'error' && (
+          <p className="text-sm text-red-600">
+            {updateStatus.message}
+          </p>
+        )}
+      </div>
     );
-  }, [busy, gameDir, handleStartUpdate, percent, stage, started]);
+  }, [updateStatus, canStart, isBusy, statusMessage, progressPercent, handleStartUpdate, localVersion, serverVersion]);
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <Button size="default" onClick={handleOpenDialog} disabled={busy || !gameDir}>
+      <Button 
+        size="default" 
+        onClick={handleOpenDialog} 
+        disabled={isBusy || !gameDir}
+      >
         Обновление
       </Button>
+      
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogContent className="sm:max-w-[450px] rounded-2xl">
           <Suspense
@@ -233,7 +315,7 @@ const UpdateButton: React.FC = () => {
               </div>
             }
           >
-            {renderPanel()}
+            {renderDialogContent()}
           </Suspense>
         </DialogContent>
       </Dialog>

@@ -30,9 +30,10 @@ const LaunchButton = () => {
     const gameDir = useSelector((state: RootState) => state.downloadSlice.gameDir);
     const javaMemory = useSelector((state: RootState) => state.settingsState.javaMemory);
     const authToken = useSelector((state: RootState) => state.authSlice.authToken);
-    const localVersion = useSelector((state: RootState) => state.downloadSlice.localVersion)
-    const serverVersion = useSelector((state: RootState) => state.downloadSlice.serverVersion)
+    const localVersion = useSelector((state: RootState) => state.downloadSlice.localVersion);
+    const serverVersion = useSelector((state: RootState) => state.downloadSlice.serverVersion);
     const ignoredPaths = useSelector((state: RootState) => state.downloadSlice.ignoredPaths);
+    
     const userUuid = useMemo(() => crypto.randomUUID(), []);
 
     const gameParams: MinecraftLaunchParams = useMemo(() => ({
@@ -51,29 +52,51 @@ const LaunchButton = () => {
         try {
           setLaunchStatus({status: "verify"})
           
+          // Діагностика ignoredPaths
+          console.log('[launch] ignoredPaths from store:', {
+            value: ignoredPaths,
+            type: typeof ignoredPaths,
+            isArray: Array.isArray(ignoredPaths),
+            length: Array.isArray(ignoredPaths) ? ignoredPaths.length : 'N/A'
+          });
+          
           const localHashes = await scanDirectory(gameDir);
           console.log('[launch] Local files scanned');
           
           const serverManifest = await fetchManifest(activeEndPoint, authToken);
           console.log('[launch] Server manifest received');
           
-          const manifestWithIgnored = {
-              ...serverManifest,
-              optionalDirectories: ignoredPaths
-          };
+          // Переконуємось що ignoredPaths це масив
+          const safeIgnoredPaths = Array.isArray(ignoredPaths) ? ignoredPaths : [];
+          
+          if (!Array.isArray(ignoredPaths)) {
+            console.warn('[launch] ignoredPaths is not an array, using empty array as fallback');
+          }
+          
+          console.log('[launch] Using ignoredPaths:', safeIgnoredPaths);
+          
           const syncResult = compareFiles(
               localHashes,
-              manifestWithIgnored,
+              serverManifest,
+              safeIgnoredPaths,
               localVersion || undefined,
               serverVersion || undefined
-          )
+          );
 
           const hasChanges = 
             syncResult.toDownload.length > 0 ||
             syncResult.toUpdate.length > 0 ||
-            syncResult.toDelete.length > 0;
+            syncResult.toDelete.length > 0 ||
+            syncResult.toDisable.length > 0;
 
           if (hasChanges) {
+            console.log('[launch] Changes detected:', {
+              toDownload: syncResult.toDownload.length,
+              toUpdate: syncResult.toUpdate.length,
+              toDelete: syncResult.toDelete.length,
+              toDisable: syncResult.toDisable.length
+            });
+            
             setLaunchStatus({status: "syncing"});
             await syncFiles(syncResult, activeEndPoint, gameDir, authToken);
             console.log('[launch] Files synchronized');
@@ -81,7 +104,7 @@ const LaunchButton = () => {
             console.log('[launch] No changes, all files up to date');
           }
           
-          setLaunchStatus({status: "launching"})
+          setLaunchStatus({status: "launching"});
           
           if (activeEndPoint && userLogin && userPassword) {
             fireAndForget(
@@ -98,12 +121,15 @@ const LaunchButton = () => {
 
           await useMinecraftLaunch(gameParams);
           
+          toast.success("Игра запущена");
+          
         } catch (err) {
-          toast.error("Не удалось проверить файлы", {
+          console.error('[launch] Error:', err);
+          toast.error("Ошибка при запуске", {
             description: String(err),
           });
         } finally {
-          setLaunchStatus({status: "idle"})
+          setLaunchStatus({status: "idle"});
         }
     }, [
       scanDirectory, 
@@ -115,6 +141,7 @@ const LaunchButton = () => {
       syncFiles,
       localVersion,
       serverVersion,
+      ignoredPaths,
       userLogin, 
       userPassword, 
       gameParams, 

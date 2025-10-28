@@ -1,48 +1,41 @@
 'use client'
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '@/store/configureStore'
 import DownloadButton from './DownloadButton'
-import { invoke } from '@tauri-apps/api/core'
-import { changeDownloadStatus, setIgnoredPaths, setLocalVersion, setServerVersion, setVersions } from '@/store/slice/downloadSlice'
+import { changeDownloadStatus, setIgnoredPaths, setVersions } from '@/store/slice/downloadSlice'
 import UpdateButton from './UpdateButton'
-import { Mod, setModsData } from '@/store/slice/modsSlice'
+import { setModsData } from '@/store/slice/modsSlice'
 import LaunchButton from './LaunchButton'
 import { listen } from '@tauri-apps/api/event'
-import path from 'path'
-import { resolveResource } from '@tauri-apps/api/path'
 import { SERVER_ENDPOINTS } from '@/lib/config'
 import { toast } from 'sonner'
-import { getLocalVersion, getPlayerSystemInfo, getServerVersion, handleIgnoreClientSettings } from '@/lib/utils'
-import { WaveDots } from './WaveDots'
-import { exists, BaseDirectory } from '@tauri-apps/plugin-fs';
+import { getLocalVersion, getPlayerSystemInfo, getServerVersion } from '@/lib/utils'
+import { exists } from '@tauri-apps/plugin-fs'
 import axios from 'axios'
 
-
-
-interface ModsConfig {
-    mods: any[];
-    presets: any[];
-    ignoredPaths?: string[];
+interface ModsConfigResponse {
+    version: string
+    mods: any[]
+    presets: any[]
+    ignoredPaths?: string[]
 }
+
 const GameButtons = () => {
     const status = useSelector((state: RootState) => state.downloadSlice.status)
     const baseDir = useSelector((state: RootState) => state.downloadSlice.gameDir)
     const authToken = useSelector((state: RootState) => state.authSlice.authToken)
-    const activeEndPoint = useSelector(
-        (s: RootState) => s.settingsState.activeEndPoint
-      )
+    const localVersion = useSelector((state: RootState) => state.downloadSlice.localVersion)
+    const serverVersion = useSelector((state: RootState) => state.downloadSlice.serverVersion)
+    const activeEndPoint = useSelector((s: RootState) => s.settingsState.activeEndPoint)
+    
+    const dispatch = useDispatch()
+
     const configUrl = useMemo(() => {
-    // fallback
-    let base = String(activeEndPoint ?? SERVER_ENDPOINTS.main)
-
-    // ensure scheme present
-    if (!/^https?:\/\//i.test(base)) base = `http://${base}`
-
-    // remove trailing slashes
-    base = base.replace(/\/+$/, '')
-
-    return `${base}/config`
+        let base = String(activeEndPoint ?? SERVER_ENDPOINTS.main)
+        if (!/^https?:\/\//i.test(base)) base = `http://${base}`
+        base = base.replace(/\/+$/, '')
+        return `${base}/launcher/config`
     }, [activeEndPoint])
 
     const versionUrl = useMemo(() => {
@@ -52,29 +45,42 @@ const GameButtons = () => {
         return `${base}/launcher/version`
     }, [activeEndPoint])
 
-    
-    
-
     const loadModsData = async () => {
         try {
-            const { data } = await axios.get<ModsConfig>(configUrl);
-            console.log("modsData", data);
+            const { data } = await axios.get<ModsConfigResponse>(configUrl, {
+                headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
+            })
+            
+            console.log('[modsData] Loaded config:', {
+                version: data.version,
+                mods: data.mods.length,
+                presets: data.presets.length,
+                ignoredPaths: data.ignoredPaths?.length || 0
+            })
             
             dispatch(setModsData({ 
                 mods: data.mods, 
                 presets: data.presets
-            }));
+            }))
             
-            if (data.ignoredPaths) {
-                dispatch(setIgnoredPaths(data.ignoredPaths));
+            if (data.ignoredPaths && data.ignoredPaths.length > 0) {
+                console.log('[modsData] Setting ignored paths:', data.ignoredPaths)
+                dispatch(setIgnoredPaths(data.ignoredPaths))
             }
         } catch (error) {
-            if (axios.isAxiosError(error) && error.response?.status === 401) {
-                throw error; 
+            if (axios.isAxiosError(error)) {
+                if (error.response?.status === 401) {
+                    console.error('[modsData] Unauthorized')
+                    toast.error('Ошибка авторизации при загрузке конфигурации')
+                    throw error
+                }
+                console.error('[modsData] Error:', error.response?.data || error.message)
+                toast.error('Не удалось загрузить конфигурацию модов')
+            } else {
+                console.error('[modsData] Unexpected error:', error)
             }
-            console.error('loadModsData Error:', error);
         }
-    };
+    }
 
     const fetchVersions = async () => {
         try {
@@ -97,27 +103,15 @@ const GameButtons = () => {
         }
     }
 
-    // useEffect(()=>{
-    //     const ignoreFiles = async () => {
-    //         if(status == "downloaded"){
-    //             await handleIgnoreClientSettings(baseDir, toast)
-    //         }
-    //     }
-    //     ignoreFiles()
-    // }, [
-    //     status
-    // ])
     const checkBaseDirectoryPresence = async (): Promise<boolean> => {
         if (!baseDir || typeof baseDir !== 'string' || baseDir.trim() === '') {
-            
             return false
         }
         try {
-            
             return await exists(baseDir)
         } catch (error) {
-            toast.error("Ошибка проверки директории:", {})
-            console.error("Ошибка проверки директории:", error)
+            toast.error('Ошибка проверки директории')
+            console.error('[checkDir] Error:', error)
             return false
         }
     }
@@ -129,99 +123,88 @@ const GameButtons = () => {
             dispatch(changeDownloadStatus('needFisrtInstall'))
             return
         }
+        
         const versions = await fetchVersions()
-
-        // if (!versions.local || !versions.server) {
-        //     console.log('Missing version data')
-        // }
-        dispatch(changeDownloadStatus('downloaded'))
+        
+        // Проверяем, нужно ли обновление
+        if (versions.local && versions.server && versions.local !== versions.server) {
+            console.log('[checkVersion] Update needed:', {
+                local: versions.local,
+                server: versions.server
+            })
+            dispatch(changeDownloadStatus('needUpdate'))
+        } else {
+            dispatch(changeDownloadStatus('downloaded'))
+        }
     }
-    // const checkVersion = async () => {
-    //     const baseDirExists = await checkBaseDirectoryPresence()
-    //     if (!baseDirExists) {
-    //         dispatch(changeDownloadStatus('needFisrtInstall'))
-    //     return
-    //     }
-    //     // TODO hide mods button if  not downloaded
-    //     try {
-    //         const gitPath = await resolveResource("portable-git/bin/git.exe");
-    //         const args = {
-    //             git_path: gitPath,
-    //             repo_path: baseDir,
-    //         }
-    //         // console.log("Checking git update with args:", args);
-    //         const hasUpdate = await invoke<boolean>('check_git_update', {
-    //             args
-    //         });
 
-    
-    //         console.log("Has update:", hasUpdate);
-    //         if (hasUpdate) {
-    //             dispatch(changeDownloadStatus('needUpdate'));
-    //             // dispatch(changeDownloadStatus('downloaded'));
-    //         } else if(baseDir){
-    //             dispatch(changeDownloadStatus('downloaded'));
-    //         }else if(!baseDir){
-    //             dispatch(changeDownloadStatus('needFisrtInstall'));
-    //         }
-    //     } catch (error) {
-    //         if(!baseDir){
-    //             dispatch(changeDownloadStatus('needFisrtInstall'));
-    //         }
-            
-    //         console.log("Ошибка проверки версии:", String(error))
-    //         // dispatch(changeDownloadStatus('downloaded'));
-    //         // toast.error("Ошибка проверки версии:", {
-    //         //     description: String(error),
-    //         // });
-    //     }
-    // }
-    const dispatch = useDispatch();
+    // Определяем, нужно ли показать кнопку обновления
+    const needsUpdate = useMemo(() => {
+        return status === 'needUpdate' || 
+               (localVersion && serverVersion && localVersion !== serverVersion)
+    }, [status, localVersion, serverVersion])
+
+    // Инициализация при монтировании или изменении baseDir/status
     useEffect(() => {
+        const initialize = async () => {
+            await loadModsData()
+            await checkVersion()
+        }
         
-        loadModsData();
-        
-        checkVersion();
+        initialize()
     }, [baseDir, status])
-    useEffect(() => {
-        let interval: NodeJS.Timeout;
-        
-        // const runCheck = async () => {
-        //     await checkVersion();
-        // };
 
-        // первый запуск сразу
-        // runCheck();
+    // Периодическая проверка версии каждые 30 секунд
+    useEffect(() => {
+        if (!baseDir) return
 
         getPlayerSystemInfo().then((info: any) => {
-            console.log("Системная информация:", info);
-        });
+            console.log('[systemInfo]', info)
+        })
 
+        const unsubscribeMC = listen<string>('minecraft-launch-progress', (event) => {
+            console.log('[MC]', event.payload)
+        })
 
-        
+        // Интервал проверки версии каждые 30 секунд
+        const versionCheckInterval = setInterval(async () => {
+            console.log('[versionCheck] Running periodic check...')
+            const baseDirExists = await checkBaseDirectoryPresence()
+            
+            if (baseDirExists) {
+                const versions = await fetchVersions()
+                
+                // Проверяем, нужно ли обновление
+                if (versions.local && versions.server && versions.local !== versions.server) {
+                    console.log('[versionCheck] Update available:', {
+                        local: versions.local,
+                        server: versions.server
+                    })
+                    dispatch(changeDownloadStatus('needUpdate'))
+                    
+                    // Показываем уведомление только один раз
+                    if (status !== 'needUpdate') {
+                        toast.info('Доступно обновление', {
+                            description: `Версия ${versions.server}`
+                        })
+                    }
+                }
+            }
+        }, 30000) // 30 секунд
 
-        // повторять каждые 30 сек
-        // interval = setInterval(runCheck, 30000);
+        return () => {
+            unsubscribeMC.then(fn => fn())
+            clearInterval(versionCheckInterval)
+        }
+    }, [baseDir, status])
 
-        // return () => {
-        //     clearInterval(interval);
-        // };
-    }, [baseDir]);
-
-    
-
-    listen<string>('minecraft-launch-progress', (event) => {
-        console.log("MC:", event.payload);
-    });
-
-    
-    
-    
     return (
-        <div>
+        <div className="flex flex-col gap-2">
             {status === 'needFisrtInstall' && <DownloadButton />}
-            {/* {status === 'needUpdate' && <UpdateButton />} */}
-            {(status === 'downloaded') && <LaunchButton/>}
+            
+            {needsUpdate && <UpdateButton />}
+            
+            {(status === 'downloaded' || status === 'needUpdate') && <LaunchButton />}
         </div>
     )
 }
