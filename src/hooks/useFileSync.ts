@@ -267,10 +267,10 @@ export function useFileSync() {
     syncResult: SyncResult,
     serverUrl: string,
     gameDir: string,
-    authToken?: string
+    authToken?: string | null
   ): Promise<void> => {
     setIsSyncing(true);
-
+    if(!authToken) { authToken = undefined; }
     try {
       const totalOperations = 
         syncResult.toDownload.length + 
