@@ -9,7 +9,7 @@ export const FILES_TO_SKIP_WORKTREE = [
 ];
 
 export const SERVER_ENDPOINTS = {
-  main: "http://localhost:8080",
+  main: "http://148.251.176.5:8080",
   proxy: "http://188.225.24.31:8080"
 }
 
