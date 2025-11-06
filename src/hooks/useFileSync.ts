@@ -82,7 +82,8 @@ export function useFileSync() {
       console.log('Optional files:', optionalFiles.length);
       console.log('Ignored patterns:', ignoredPaths);
 
-      const versionUnchanged = localVersion === serverVersion || localVersion === serverManifest.version;
+      const versionUnchanged = !localVersion || localVersion === serverVersion || localVersion === serverManifest.version;
+
       
       if (versionUnchanged) {
         console.log('Version unchanged, will skip non-Melorium files');
