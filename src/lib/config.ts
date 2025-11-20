@@ -10,7 +10,7 @@ export const FILES_TO_SKIP_WORKTREE = [
 
 export const SERVER_ENDPOINTS = {
   main: "http://148.251.176.5:8080",
-  proxy: "http://188.225.24.31:8080"
+  proxy: "http://89.23.100.63:8080"
 }
 
 export const GDRIVE_FILE_ID = "16TvYKt7D0gXnOZ-t6UwFeCkdiQ3_WsK1"
