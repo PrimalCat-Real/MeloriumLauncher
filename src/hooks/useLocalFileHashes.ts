@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
-import { readDir, readFile, stat } from '@tauri-apps/plugin-fs';
+import { readDir } from '@tauri-apps/plugin-fs';
 import { join } from '@tauri-apps/api/path';
+import { invoke } from '@tauri-apps/api/core';
 
 interface CachedFileInfo {
   hash: string;
@@ -12,17 +13,26 @@ interface LocalFileHashes {
   [relativePath: string]: string;
 }
 
+// Структура ответа от Rust команды get_files_meta_batch
+interface RustFileMeta {
+  size: number;
+  last_modified: number;
+  exists: boolean;
+}
+
 const CACHE_KEY = 'file_hash_cache';
+const BATCH_SIZE = 50; // Оптимальный размер пачки (можно 20-100)
 
 export function useLocalFileHashes() {
   const [isScanning, setIsScanning] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
 
+  // --- Работа с кэшем (без изменений) ---
   const loadCache = useCallback((): Map<string, CachedFileInfo> => {
     try {
       const cached = localStorage.getItem(CACHE_KEY);
       if (!cached) return new Map();
-      
+
       const parsed = JSON.parse(cached);
       return new Map(Object.entries(parsed));
     } catch (e) {
@@ -40,112 +50,114 @@ export function useLocalFileHashes() {
     }
   }, []);
 
-  const calculateFileHash = useCallback(async (filePath: string): Promise<string> => {
-    try {
-      const contents = await readFile(filePath);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', contents);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      return hashHex;
-    } catch (e) {
-      console.error('[hash] Failed to calculate hash for', filePath, e);
-      throw e;
-    }
-  }, []);
-
-  const getFileStats = useCallback(async (filePath: string): Promise<{ size: number; lastModified: number } | null> => {
-    try {
-      const metadata = await stat(filePath);
-      return {
-        size: metadata.size,
-        lastModified: metadata.mtime ? new Date(metadata.mtime).getTime() : 0,
-      };
-    } catch (e) {
-      return null;
-    }
-  }, []);
-
-  const getFileHash = useCallback(async (
-    filePath: string,
-    cache: Map<string, CachedFileInfo>
-  ): Promise<string | null> => {
-    const stats = await getFileStats(filePath);
-    if (!stats) return null;
-
-    const cached = cache.get(filePath);
-    
-    if (cached && cached.size === stats.size && cached.lastModified === stats.lastModified) {
-      return cached.hash;
-    }
-
-    const hash = await calculateFileHash(filePath);
-    
-    cache.set(filePath, {
-      hash,
-      size: stats.size,
-      lastModified: stats.lastModified,
-    });
-
-    return hash;
-  }, [calculateFileHash, getFileStats]);
-
+  // --- Основная логика сканирования ---
   const scanDirectory = useCallback(async (dirPath: string): Promise<LocalFileHashes> => {
     setIsScanning(true);
     const cache = loadCache();
-    const hashes: LocalFileHashes = {};
-    const allFiles: string[] = [];
+    const finalHashes: LocalFileHashes = {};
 
-    const collectFiles = async (currentPath: string) => {
-      try {
-        const entries = await readDir(currentPath);
+    try {
+      // ШАГ 1: Мгновенное получение всех файлов через Rust (1 запрос вместо тысяч)
+      // Требует реализации команды 'scan_directory_recursive' на бэкенде
+      const allFiles = await invoke<string[]>('scan_directory_recursive', { 
+        rootPath: dirPath 
+      });
+      
+      const totalFiles = allFiles.length;
+      console.log(`[scan] Found ${totalFiles} files via Rust scan`);
+      
+      setProgress({ current: 0, total: totalFiles });
+
+      // ШАГ 2: Пакетная обработка (Batching)
+      for (let i = 0; i < totalFiles; i += BATCH_SIZE) {
+        const chunkPaths = allFiles.slice(i, i + BATCH_SIZE);
         
-        for (const entry of entries) {
-          const fullPath = await join(currentPath, entry.name);
-          
-          if (entry.isDirectory) {
-            await collectFiles(fullPath);
-          } else if (entry.isFile) {
-            allFiles.push(fullPath);
+        try {
+          // А. Получаем метаданные пачкой (размер, дата)
+          const metaMap = await invoke<Record<string, RustFileMeta>>('get_files_meta_batch', { 
+            paths: chunkPaths 
+          });
+
+          const pathsToHash: string[] = [];
+
+          // Б. Анализируем: кэш vs реальность
+          for (const filePath of chunkPaths) {
+            const meta = metaMap[filePath];
+            
+            if (!meta || !meta.exists) continue;
+
+            const cached = cache.get(filePath);
+
+            // Сравниваем с кэшем (размер + время изменения)
+            if (cached && cached.size === meta.size && cached.lastModified === meta.last_modified) {
+              // Данные актуальны -> берем хеш из кэша
+              const relativePath = filePath
+                .replace(dirPath, '')
+                .replace(/^[\\\/]+/, '') // Убираем лидирующие слеши
+                .replace(/\\/g, '/');    // Нормализуем разделители
+
+              finalHashes[relativePath] = cached.hash;
+            } else {
+              // Файл новый или изменен -> в очередь на хеширование
+              pathsToHash.push(filePath);
+            }
           }
+
+          // В. Хешируем только то, что реально изменилось
+          if (pathsToHash.length > 0) {
+            const newHashes = await invoke<Record<string, string>>('hash_files_batch', { 
+              paths: pathsToHash 
+            });
+
+            // Сохраняем новые хеши
+            for (const [filePath, hash] of Object.entries(newHashes)) {
+              const meta = metaMap[filePath];
+              if (meta && hash) {
+                const relativePath = filePath
+                  .replace(dirPath, '')
+                  .replace(/^[\\\/]+/, '')
+                  .replace(/\\/g, '/');
+
+                finalHashes[relativePath] = hash;
+
+                // Обновляем кэш
+                cache.set(filePath, {
+                  hash,
+                  size: meta.size,
+                  lastModified: meta.last_modified,
+                });
+              }
+            }
+          }
+
+        } catch (e) {
+          console.error('[batch] Failed to process chunk:', e);
         }
-      } catch (e) {
-        console.error('[scan] Failed to scan:', currentPath, e);
+
+        // Обновляем UI прогресс
+        setProgress({ current: Math.min(i + BATCH_SIZE, totalFiles), total: totalFiles });
       }
-    };
 
-    await collectFiles(dirPath);
-    setProgress({ current: 0, total: allFiles.length });
-
-    for (let i = 0; i < allFiles.length; i++) {
-      const fullPath = allFiles[i];
+      saveCache(cache);
       
-      let relativePath = fullPath
-        .replace(dirPath, '')
-        .replace(/^[\\\/]+/, '')
-        .replace(/\\/g, '/');
+      // Лог для отладки (первые 5 файлов)
+      const firstFive = Object.entries(finalHashes).slice(0, 5).map(([path, hash]) => ({
+        path,
+        hash,
+      }));
+      console.log('[LOCAL MANIFEST] First 5 files:', JSON.stringify(firstFive, null, 2));
       
-      setProgress({ current: i + 1, total: allFiles.length });
+      return finalHashes;
 
-      const hash = await getFileHash(fullPath, cache);
-      if (hash) {
-        hashes[relativePath] = hash;
-      }
+    } catch (e) {
+      console.error('[scan] Fatal error during directory scan:', e);
+      setIsScanning(false);
+      return {};
+    } finally {
+      setIsScanning(false);
+      setProgress({ current: 0, total: 0 });
     }
-
-    saveCache(cache);
-    setIsScanning(false);
-    setProgress({ current: 0, total: 0 });
-
-    const firstFive = Object.entries(hashes).slice(0, 5).map(([path, hash]) => ({
-      path,
-      hash,
-    }));
-
-    console.log('[LOCAL MANIFEST] First 5 files:', JSON.stringify(firstFive, null, 2));
-    
-    return hashes;
-  }, [loadCache, saveCache, getFileHash]);
-
+  }, [loadCache, saveCache]);
   const clearCache = useCallback(() => {
     localStorage.removeItem(CACHE_KEY);
   }, []);

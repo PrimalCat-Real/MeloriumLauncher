@@ -4,6 +4,7 @@ use sysinfo::System;
 use tokio::fs;
 use tokio::fs::read_to_string;
 use tokio_stream::StreamExt;
+use walkdir::WalkDir;
 
 #[tauri::command]
 pub async fn get_local_version_json(path: String) -> Result<String, String> {
@@ -125,4 +126,19 @@ pub async fn delete_file(path: String) -> Result<(), String> {
     }
     
     Ok(())
+}
+
+#[tauri::command]
+pub fn scan_directory_recursive(root_path: String) -> Vec<String> {
+    let mut files = Vec::new();
+    
+    for entry in WalkDir::new(&root_path).into_iter().filter_map(|e| e.ok()) {
+        if entry.file_type().is_file() {
+
+            if let Some(path_str) = entry.path().to_str() {
+                files.push(path_str.to_string());
+            }
+        }
+    }
+    files
 }

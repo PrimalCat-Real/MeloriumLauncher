@@ -149,6 +149,13 @@ const modsSlice = createSlice({
   name: "modsState",
   initialState,
   reducers: {
+    resetMods: (state) => {
+      state.mods = []
+      state.missingMods = []
+      state.presets = []
+      state.activePresetId = "all"
+      state.presetStates = {}
+    },
     setMissingMods: (state, action: PayloadAction<{ missingMods: Mod[] }>) => {
       state.missingMods = action.payload.missingMods
     },
@@ -203,6 +210,7 @@ export const {
   setActivePreset,
   toggleMod,
   setMissingMods,
+  resetMods,
   removeFromMissingMods,
   savePresetState,
   resetPresetState,

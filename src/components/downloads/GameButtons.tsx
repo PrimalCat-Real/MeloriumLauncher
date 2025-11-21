@@ -5,7 +5,7 @@ import { RootState } from '@/store/configureStore'
 import DownloadButton from './DownloadButton'
 import { changeDownloadStatus, setIgnoredPaths, setVersions } from '@/store/slice/downloadSlice'
 import UpdateButton from './UpdateButton'
-import { setModsData } from '@/store/slice/modsSlice'
+import { resetMods, setModsData } from '@/store/slice/modsSlice'
 import LaunchButton from './LaunchButton'
 import { listen } from '@tauri-apps/api/event'
 import { SERVER_ENDPOINTS } from '@/lib/config'
@@ -105,6 +105,7 @@ const GameButtons = () => {
 
     const checkBaseDirectoryPresence = async (): Promise<boolean> => {
         if (!baseDir || typeof baseDir !== 'string' || baseDir.trim() === '') {
+            dispatch(resetMods())
             return false
         }
         try {
@@ -120,6 +121,7 @@ const GameButtons = () => {
         const baseDirExists = await checkBaseDirectoryPresence()
        
         if (!baseDirExists) {
+            dispatch(resetMods())
             dispatch(changeDownloadStatus('needFisrtInstall'))
             return
         }
@@ -138,13 +140,12 @@ const GameButtons = () => {
         }
     }
 
-    // Определяем, нужно ли показать кнопку обновления
     const needsUpdate = useMemo(() => {
+        if (status === 'needFisrtInstall') return false;
         return status === 'needUpdate' || 
                (localVersion && serverVersion && localVersion !== serverVersion)
     }, [status, localVersion, serverVersion])
 
-    // Инициализация при монтировании или изменении baseDir/status
     useEffect(() => {
         const initialize = async () => {
             await loadModsData()
@@ -201,10 +202,11 @@ const GameButtons = () => {
     return (
         <div className="flex flex-col gap-2">
             {status === 'needFisrtInstall' && <DownloadButton />}
-            
-            {needsUpdate && <UpdateButton />}
-            
-            {(status === 'downloaded' || status === 'needUpdate') && <LaunchButton />}
+            {needsUpdate ? (
+                <UpdateButton />
+            ) : (
+                status === 'downloaded' && <LaunchButton />
+            )}
         </div>
     )
 }

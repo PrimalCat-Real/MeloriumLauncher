@@ -12,6 +12,7 @@ import { useManifest } from '@/hooks/useManifest';
 import { useFileSync } from '@/hooks/useFileSync';
 import { toast } from 'sonner';
 import { LoaderCircle } from 'lucide-react';
+import { Progress } from '../ui/progress';
 
 interface UpdateStatus {
   stage: 'idle' | 'scanning' | 'comparing' | 'syncing' | 'complete' | 'error';
@@ -232,16 +233,16 @@ const UpdateButton: React.FC = () => {
   const renderDialogContent = useCallback(() => {
     if (updateStatus.stage === 'idle') {
       return (
-        <div className="space-y-4">
-          <div className="space-y-2">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2 mb-4">
             <h3 className="text-lg font-semibold">Обновление игры</h3>
             <p className="text-sm text-muted-foreground">
               Будут проверены и обновлены все файлы клиента, включая библиотеки и ресурсы Minecraft.
             </p>
             {localVersion && serverVersion && (
-              <div className="text-sm space-y-1">
-                <p>Текущая версия: <span className="font-mono">{localVersion}</span></p>
-                <p>Версия на сервере: <span className="font-mono">{serverVersion}</span></p>
+              <div className="text-sm space-y-1 flex justify-between w-full">
+                <p>Ваща версия: <span className="font-mono">{localVersion}</span></p>
+                <p>Текущая версия: <span className="font-mono">{serverVersion}</span></p>
               </div>
             )}
           </div>
@@ -271,12 +272,8 @@ const UpdateButton: React.FC = () => {
             <span>Прогресс</span>
             <span className="font-mono">{progressPercent}%</span>
           </div>
-          <div className="h-2 bg-secondary rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-primary transition-all duration-300"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
+          <Progress value={progressPercent} className="h-2 bg-secondary rounded-full overflow-hidden ">
+          </Progress>
         </div>
 
         {updateStatus.stage === 'complete' && (

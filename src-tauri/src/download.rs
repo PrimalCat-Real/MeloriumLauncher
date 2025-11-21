@@ -2,14 +2,16 @@
 
 use reqwest::Client;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use std::{fs, io};
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, command};
 use tokio::{fs::File, io::AsyncWriteExt};
 use tokio_stream::StreamExt;
 use zip::ZipArchive;
-
+use std::time::UNIX_EPOCH;
+use sha2::{Sha256, Digest};
 #[derive(Serialize, Clone)]
 pub struct StagePayload<'a> {
     label: &'a str,
@@ -311,4 +313,63 @@ pub async fn download_and_unzip_drive(
     }
 
     Ok(())
+}
+
+
+#[derive(serde::Serialize)]
+pub struct FileMeta {
+    size: u64,
+    last_modified: u64,
+    exists: bool,
+}
+
+#[command]
+pub fn get_files_meta_batch(paths: Vec<String>) -> HashMap<String, FileMeta> {
+    let mut results = HashMap::new();
+
+    for path_str in paths {
+        let path = Path::new(&path_str);
+
+        if let Ok(metadata) = fs::metadata(path) {
+            let modified_ms = metadata.modified()
+                .unwrap_or(UNIX_EPOCH)
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as u64;
+
+            results.insert(path_str, FileMeta {
+                size: metadata.len(),
+                last_modified: modified_ms,
+                exists: true,
+            });
+        } else {
+            results.insert(path_str, FileMeta {
+                size: 0,
+                last_modified: 0,
+                exists: false,
+            });
+        }
+    }
+
+    results
+}
+
+#[command]
+pub fn hash_files_batch(paths: Vec<String>) -> HashMap<String, String> {
+    let mut results = HashMap::new();
+
+    for path_str in paths {
+        let path = Path::new(&path_str);
+
+        if let Ok(bytes) = fs::read(path) {
+            let mut hasher = Sha256::new();
+            hasher.update(&bytes);
+            let result = hasher.finalize();
+            let hash_hex = format!("{:x}", result);
+
+            results.insert(path_str, hash_hex);
+        }
+    }
+
+    results
 }
