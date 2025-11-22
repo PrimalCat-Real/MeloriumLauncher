@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import axios from 'axios';
+import { SERVER_ENDPOINTS } from '@/lib/config';
 
 interface FileEntry {
   path: string;
@@ -28,67 +29,78 @@ export function useManifest() {
     setIsLoading(true);
     setError(null);
 
-    const maxRetries = 3; // Количество попыток
+    const maxRetries = 4; // 1-3 main, 4-я через proxy [web:1]
     let attempt = 0;
     let lastError: any;
 
     while (attempt < maxRetries) {
       try {
         attempt++;
-        console.log(`[manifest] Attempt ${attempt}/${maxRetries} fetching from ${serverUrl}...`);
+
+        // Для 1–3 попытки используем основной URL, на 4-й — прокси [web:1]
+        const currentBaseUrl =
+          attempt < maxRetries
+            ? serverUrl
+            : SERVER_ENDPOINTS.proxy;
+
+        console.log(
+          `[manifest] Attempt ${attempt}/${maxRetries} fetching from ${currentBaseUrl}...`
+        );
 
         const headers: Record<string, string> = {
-          'Content-Type': 'application/json',
-          // Добавляем заголовок, чтобы сервер не кэшировал ответ (для надежности)
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache"
         };
 
         if (authToken) {
-          headers['Authorization'] = `Bearer ${authToken}`;
+          headers["Authorization"] = `Bearer ${authToken}`;
         }
 
-        // Добавляем timestamp, чтобы обойти кэширование на уровне провайдеров/прокси
         const response = await axios.get<LauncherManifest>(
-          `${serverUrl}/launcher/manifest?t=${Date.now()}`,
-          { 
+          `${currentBaseUrl}/launcher/manifest`,
+          {
             headers,
-            timeout: 15000, // 15 секунд таймаут (ОБЯЗАТЕЛЬНО)
-            
-            // Валидация статуса: считаем ошибкой всё, что не 200-299
-            validateStatus: (status) => status >= 200 && status < 300,
+            timeout: 15000,
+            validateStatus: (status) => status >= 200 && status < 300
           }
         );
 
-        console.log(`[manifest] Success on attempt ${attempt}. Ver: ${response.data.version}`);
+        console.log(
+          `[manifest] Success on attempt ${attempt}. Ver: ${response.data.version}`
+        );
 
+        setIsLoading(false);
         return response.data;
-
       } catch (err: any) {
         lastError = err;
-        const isTimeout = err.code === 'ECONNABORTED';
-        const isNetwork = err.message === 'Network Error';
-        
-        console.error(`[manifest] Attempt ${attempt} failed. Timeout: ${isTimeout}, Msg: ${err.message}`);
+        const isTimeout = err.code === "ECONNABORTED";
+        const isNetwork = err.message === "Network Error";
 
-        // Если это последняя попытка — выбрасываем ошибку
+        console.error(
+          `[manifest] Attempt ${attempt} failed. Timeout: ${isTimeout}, Network: ${isNetwork}, Msg: ${err.message}`
+        );
+
         if (attempt === maxRetries) break;
 
-        // Пауза перед следующей попыткой (1с, 2с...)
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        await new Promise((resolve) =>
+          setTimeout(resolve, 1000 * attempt)
+        );
       }
     }
 
-    // Если вышли из цикла, значит все попытки провалились
-    const finalError = lastError instanceof Error ? lastError : new Error('Manifest fetch failed after retries');
+    const finalError =
+      lastError instanceof Error
+        ? lastError
+        : new Error("Manifest fetch failed after retries");
+    setIsLoading(false);
     setError(finalError);
     throw finalError;
-
   }, []);
 
   return {
     fetchManifest,
     isLoading,
-    error,
+    error
   };
 }
