@@ -62,6 +62,10 @@ const LaunchButton = () => {
           
           const localHashes = await scanDirectory(gameDir);
           console.log('[launch] Local files scanned');
+          console.log(`[launch] Target Endpoint: "${activeEndPoint}"`);
+          if (!activeEndPoint) {
+              throw new Error("Active Endpoint is missing in settings!");
+          }
           
           const serverManifest = await fetchManifest(activeEndPoint, authToken);
           console.log('[launch] Server manifest received');

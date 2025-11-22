@@ -13,6 +13,7 @@ import { useFileSync } from '@/hooks/useFileSync';
 import { toast } from 'sonner';
 import { LoaderCircle } from 'lucide-react';
 import { Progress } from '../ui/progress';
+import { invoke } from '@tauri-apps/api/core';
 
 interface UpdateStatus {
   stage: 'idle' | 'scanning' | 'comparing' | 'syncing' | 'complete' | 'error';
@@ -52,6 +53,26 @@ const UpdateButton: React.FC = () => {
     },
     [resetState]
   );
+
+  const updateLocalVersionFile = useCallback(async (dir: string, newVersion: string) => {
+    try {
+      const configPath = `${dir}/melorium.json`;
+      const content = await invoke<string>('get_local_version_json', { path: configPath });
+      const json = JSON.parse(content);
+      json.version = newVersion;
+  
+      const updatedContent = JSON.stringify(json, null, 2);
+      const encoder = new TextEncoder();
+      const data = Array.from(encoder.encode(updatedContent));
+      await invoke('write_file_bytes', { path: configPath, data });
+      console.log('[update] melorium.json updated to version:', newVersion);
+    } catch (e) {
+      console.error('[update] Failed to update melorium.json:', e);
+      toast.error('Не удалось обновить файл версии', {
+          description: 'Возможно, потребуется повторное обновление'
+      });
+    }
+  }, []);
 
   const handleStartUpdate = useCallback(async (): Promise<void> => {
     if (!gameDir || !activeEndPoint) {
@@ -109,34 +130,27 @@ const UpdateButton: React.FC = () => {
       });
 
       if (!hasChanges) {
-        console.log('[update] No changes needed');
-        setUpdateStatus({ 
-          stage: 'complete', 
-          message: 'Все файлы актуальны',
-          progress: 100 
-        });
-        
-        toast.success('Обновление не требуется', {
-          description: 'Все файлы уже актуальны'
-        });
-        
-        setTimeout(() => {
-          setDialogOpen(false);
-          resetState();
-        }, 2000);
-        
-        return;
+         // ДАЖЕ ЕСЛИ ФАЙЛЫ НЕ МЕНЯЛИСЬ, НО ВЕРСИЯ ОТЛИЧАЕТСЯ — ОБНОВЛЯЕМ JSON
+         if (localVersion !== serverManifest.version) {
+            console.log('[update] No file changes, but version differs. Updating melorium.json...', gameDir);
+             await updateLocalVersionFile(gameDir, serverManifest.version);
+             dispatch(setVersions({ local: serverManifest.version, server: serverManifest.version }));
+             toast.success('Версия обновлена');
+         } else {
+             toast.success('Обновление не требуется');
+         }
+         setUpdateStatus({ stage: 'complete', message: 'Все файлы актуальны', progress: 100 });
+         setTimeout(() => { setDialogOpen(false); resetState(); }, 2000);
+         return;
       }
 
       // 4. Синхронизация файлов
-      setUpdateStatus({ 
-        stage: 'syncing', 
-        message: 'Обновление файлов...',
-        progress: 0 
-      });
-      console.log('[update] Starting file synchronization...');
-
+      setUpdateStatus({ stage: 'syncing', message: 'Обновление файлов...', progress: 0 });
       await syncFiles(syncResult, activeEndPoint, gameDir, authToken);
+
+      // === ВАЖНЫЙ ФИКС: ЯВНОЕ ОБНОВЛЕНИЕ melorium.json ===
+      await updateLocalVersionFile(gameDir, serverManifest.version);
+      // ====================================================
 
       // 5. Обновление версии в store
       dispatch(setVersions({
@@ -144,21 +158,10 @@ const UpdateButton: React.FC = () => {
         server: serverManifest.version
       }));
 
-      console.log('[update] Update completed successfully');
-      setUpdateStatus({ 
-        stage: 'complete', 
-        message: 'Обновление завершено',
-        progress: 100 
-      });
-
-      toast.success('Обновление завершено', {
-        description: `Версия ${serverManifest.version}`
-      });
-
-      // Меняем статус скачивания
+      setUpdateStatus({ stage: 'complete', message: 'Обновление завершено', progress: 100 });
+      toast.success('Обновление завершено', { description: `Версия ${serverManifest.version}` });
       dispatch(changeDownloadStatus('downloaded'));
 
-      // Закрываем диалог через 2 секунды
       setTimeout(() => {
         setDialogOpen(false);
         resetState();

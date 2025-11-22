@@ -15,8 +15,11 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { toast } from "sonner";
 import { GDRIVE_API_KEY, GDRIVE_FILE_ID } from "@/lib/config";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import { resourceDir } from "@tauri-apps/api/path";
 
 const ProgressPanel = lazy(() => import("../shared/ProgressPanel"));
+
+const normalizePath = (p: string) => p.replace(/\\/g, '/').toLowerCase().replace(/\/+$/, '');
 
 const DownloadButton: React.FC = () => {
   const dispatch = useDispatch();
@@ -32,13 +35,25 @@ const DownloadButton: React.FC = () => {
   const handlePickPath = useCallback(async () => {
     const selected = await openDialog({ directory: true, multiple: false, title: "Выберите папку для установки игры" });
     if (selected && typeof selected === "string") {
+      try {
+        const appPath = await resourceDir();
+        
+        if (normalizePath(selected) === normalizePath(appPath)) {
+            toast.error("Недопустимая папка", { 
+                description: "Нельзя установить игру в папку с лаунчером. Пожалуйста, создайте или выберите отдельную папку." 
+            });
+            return;
+        }
+      } catch (e) {
+        console.warn("[DownloadButton] Could not verify resource dir:", e);
+      }
       let pathToUse = selected;
-      // Используем invoke, так как проверка "пустая ли папка" специфична, 
-      // но можно переписать на plugin-fs (readDir), если нужно. Оставляю как было.
       const isEmpty = await invoke<boolean>("is_dir_empty", { path: selected }).catch(() => false);
+      
       if (!isEmpty) {
         pathToUse = selected.endsWith("melorium") ? selected : `${selected}/melorium`;
         const meloriumExists = await invoke<boolean>("is_dir_empty", { path: pathToUse }).catch(() => null);
+        
         if (meloriumExists === false) {
           toast.error("Ошибка", { description: "Папка melorium внутри выбранной директории уже существует и не пуста." });
           return;
@@ -139,6 +154,7 @@ const DownloadButton: React.FC = () => {
     );
   }, [canClose, gameDir, handleDialogOpenChange, handlePickPath, handleStart, started, state.percent, state.stage, title, ui.downloaded, ui.eta, ui.speed, ui.total]);
 
+  const isLocked = started && !canClose;
   return (
     <div className="flex flex-col gap-3">
       <Button size="main" onClick={handleOpenDialog}>
@@ -146,7 +162,14 @@ const DownloadButton: React.FC = () => {
       </Button>
 
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent className="sm:max-w-[450px] rounded-2xl" showCloseButton={canClose || !started}>
+        <DialogContent  className="sm:max-w-[450px] rounded-2xl" showCloseButton={!isLocked} 
+            onEscapeKeyDown={(e) => {
+                    if (isLocked) e.preventDefault();
+                }}
+            onInteractOutside={(e) => {
+                    if (isLocked) e.preventDefault();
+                }}
+            >
           {/* Фикс ошибки из консоли (Warning: Missing Description/Title) */}
           <VisuallyHidden>
              <DialogTitle>Меню установки</DialogTitle>

@@ -129,16 +129,18 @@ pub async fn delete_file(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn scan_directory_recursive(root_path: String) -> Vec<String> {
-    let mut files = Vec::new();
-    
-    for entry in WalkDir::new(&root_path).into_iter().filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-
-            if let Some(path_str) = entry.path().to_str() {
-                files.push(path_str.to_string());
+pub async fn scan_directory_recursive(root_path: String) -> Result<Vec<String>, String> {
+    let files = tokio::task::spawn_blocking(move || {
+        let mut files = Vec::new();
+        for entry in WalkDir::new(&root_path).into_iter().filter_map(|e| e.ok()) {
+            if entry.file_type().is_file() {
+                if let Some(path_str) = entry.path().to_str() {
+                    files.push(path_str.to_string());
+                }
             }
         }
-    }
-    files
+        files
+    }).await.map_err(|e| e.to_string())?;
+    
+    Ok(files)
 }

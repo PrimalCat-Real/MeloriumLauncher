@@ -324,13 +324,13 @@ pub struct FileMeta {
 }
 
 #[command]
-pub fn get_files_meta_batch(paths: Vec<String>) -> HashMap<String, FileMeta> {
+pub async fn get_files_meta_batch(paths: Vec<String>) -> Result<HashMap<String, FileMeta>, String> {
     let mut results = HashMap::new();
 
     for path_str in paths {
-        let path = Path::new(&path_str);
-
-        if let Ok(metadata) = fs::metadata(path) {
+        let path_buf = PathBuf::from(&path_str);
+        
+        if let Ok(metadata) = tokio::fs::metadata(&path_buf).await {
             let modified_ms = metadata.modified()
                 .unwrap_or(UNIX_EPOCH)
                 .duration_since(UNIX_EPOCH)
@@ -351,25 +351,25 @@ pub fn get_files_meta_batch(paths: Vec<String>) -> HashMap<String, FileMeta> {
         }
     }
 
-    results
+    Ok(results)
 }
 
 #[command]
-pub fn hash_files_batch(paths: Vec<String>) -> HashMap<String, String> {
-    let mut results = HashMap::new();
-
-    for path_str in paths {
-        let path = Path::new(&path_str);
-
-        if let Ok(bytes) = fs::read(path) {
-            let mut hasher = Sha256::new();
-            hasher.update(&bytes);
-            let result = hasher.finalize();
-            let hash_hex = format!("{:x}", result);
-
-            results.insert(path_str, hash_hex);
+pub async fn hash_files_batch(paths: Vec<String>) -> Result<HashMap<String, String>, String> {
+    let result = tokio::task::spawn_blocking(move || {
+        let mut results = HashMap::new();
+        for path_str in paths {
+            let path = Path::new(&path_str);
+            if let Ok(bytes) = std::fs::read(path) {
+                let mut hasher = Sha256::new();
+                hasher.update(&bytes);
+                let result = hasher.finalize();
+                let hash_hex = format!("{:x}", result);
+                results.insert(path_str, hash_hex);
+            }
         }
-    }
+        results
+    }).await.map_err(|e| format!("Hashing task failed: {}", e))?;
 
-    results
+    Ok(result)
 }
