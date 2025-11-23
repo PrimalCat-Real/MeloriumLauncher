@@ -4,6 +4,7 @@ import { join } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
 import { remove, mkdir, exists, readDir, rename } from '@tauri-apps/plugin-fs';
 import { matchesIgnoredPath } from '@/lib/glob-utils';
+import * as Sentry from "@sentry/browser";
 
 interface FileEntry {
   path: string;
@@ -234,10 +235,11 @@ export function useFileSync() {
           await invoke('download_file_direct', {
             url: fullUrl,
             path: localPath,
-            authToken: authToken || null // Rust ждет Option<String>
+            authToken: authToken || null
           });
           return; // Успех
         } catch (error) {
+          Sentry.captureException(error);
           attempts++;
           console.warn(`[download] Failed to download ${file.path} (Attempt ${attempts}/${maxAttempts}):`, error);
           
@@ -387,6 +389,7 @@ export function useFileSync() {
       console.log('=================\n');
 
     } catch (error) {
+      Sentry.captureException(error);
       console.error('[sync] Synchronization failed:', error);
       throw error;
     } finally {

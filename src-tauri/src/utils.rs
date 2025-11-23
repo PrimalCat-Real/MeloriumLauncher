@@ -118,15 +118,58 @@ pub async fn write_file_bytes(path: String, data: Vec<u8>) -> Result<(), String>
 pub async fn delete_file(path: String) -> Result<(), String> {
     use tokio::fs;
     use std::path::Path;
+    use std::time::Duration;
 
     let p = Path::new(&path);
-    if p.exists() {
-        fs::remove_file(&path)
-            .await
-            .map_err(|e| format!("Failed to delete file: {}", e))?;
-    }
     
-    Ok(())
+    if !p.exists() {
+        return Ok(());
+    }
+
+    // Пробуем удалить файл с повторами (до 5 попыток)
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        match fs::remove_file(&path).await {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                // Коды ошибок Windows: 
+                // 5 = Access Denied
+                // 32 = Sharing Violation (занят другим процессом)
+                let raw_os_error = e.raw_os_error().unwrap_or(0);
+                let is_lock_error = raw_os_error == 5 || raw_os_error == 32; 
+
+                if is_lock_error && attempts < 5 {
+                    // Ждем с экспоненциальной задержкой: 200ms, 400ms, 600ms...
+                    tokio::time::sleep(Duration::from_millis(200 * attempts)).await;
+                    continue;
+                }
+                
+                // Если не вышло после 5 попыток или ошибка другая — сдаемся
+                return Err(format!("Failed to delete file '{}': {} (code: {})", path, e, raw_os_error));
+            }
+        }
+    }
+}
+
+async fn remove_file_with_retry(path: &Path) -> std::io::Result<()> {
+    if !path.exists() { return Ok(()); }
+    
+    let mut attempts = 0;
+    loop {
+        attempts += 1;
+        match tokio::fs::remove_file(path).await {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                let code = e.raw_os_error().unwrap_or(0);
+                if (code == 5 || code == 32) && attempts < 5 {
+                    tokio::time::sleep(std::time::Duration::from_millis(200 * attempts)).await;
+                    continue;
+                }
+                return Err(e);
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -153,61 +196,63 @@ pub async fn download_file_direct(
     path: String, 
     auth_token: Option<String>
 ) -> Result<(), String> {
-    // 1. Создаем клиент с ПОЛНЫМ отключением сжатия
+    // 1. Создаем клиент
     let client = reqwest::Client::builder()
         .no_gzip()
         .no_brotli()
         .no_deflate()
-        // Добавляем таймауты на всякий случай (для зависших коннектов)
         .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(300)) // 5 минут на скачивание файла
+        .timeout(std::time::Duration::from_secs(600))
         .build()
         .map_err(|e| format!("Client build error: {}", e))?;
     
-    // 2. Собираем запрос
     let mut request = client.get(&url);
     
     if let Some(token) = auth_token {
         request = request.header("Authorization", format!("Bearer {}", token));
     }
 
-    // ВАЖНО: Явно просим сервер НЕ сжимать ("identity" = без кодирования)
+    // Просим сервер не сжимать
     request = request.header("Accept-Encoding", "identity");
 
-    // 3. Отправляем запрос
-    let response = request
-        .send()
-        .await
-        .map_err(|e| format!("Request failed: {}", e))?;
+    // 2. Получаем ответ, но не читаем тело сразу
+    let mut response = request.send().await.map_err(|e| format!("Request failed: {}", e))?;
 
     if !response.status().is_success() {
         return Err(format!("Server returned status: {}", response.status()));
     }
 
-    // Создаем папки
-    if let Some(parent) = std::path::Path::new(&path).parent() {
+    // === ГЛАВНЫЙ ХАК ===
+    // Удаляем заголовок Content-Encoding из ответа (если он есть),
+    // чтобы reqwest даже не думал пытаться разжимать тело.
+    // Мы хотим сырые байты, какими бы они ни были.
+    response.headers_mut().remove(reqwest::header::CONTENT_ENCODING);
+    // ===================
+
+    // Подготовка папок
+    let path_obj = std::path::Path::new(&path);
+    if let Some(parent) = path_obj.parent() {
         if !parent.exists() {
             tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
         }
     }
 
-    // 4. Сохраняем файл
+    // Удаляем старый файл с retry (fix os error 5)
+    if let Err(e) = remove_file_with_retry(path_obj).await {
+        println!("Warning: Failed to remove old file: {}", e);
+    }
+
+    // 3. Читаем и пишем
     let mut file = tokio::fs::File::create(&path).await.map_err(|e| e.to_string())?;
     let mut stream = response.bytes_stream();
 
     while let Some(chunk_result) = futures_util::StreamExt::next(&mut stream).await {
-        // Вот здесь вылетала ошибка "error decoding response body"
-        // Теперь, с "Accept-Encoding: identity" и .no_gzip(), сервер должен присылать raw bytes.
-        // Если сервер (Nginx) ИГНОРИРУЕТ это и все равно шлет gzip, 
-        // то файл сохранится сжатым (битым для игры), но ошибки загрузки НЕ БУДЕТ.
-        // Это позволит хотя бы скачать файл, а дальше хеш-проверка его отловит.
-        
         match chunk_result {
             Ok(chunk) => {
                 tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await.map_err(|e| e.to_string())?;
             },
             Err(e) => {
-                // Если ошибка все же случилась (обрыв сети), возвращаем понятный текст
+                // Если здесь все равно ошибка — значит это реальный обрыв сети
                 return Err(format!("Stream interrupted: {}", e));
             }
         }

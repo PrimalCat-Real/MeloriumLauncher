@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { LoaderCircle } from 'lucide-react';
 import { Progress } from '../ui/progress';
 import { invoke } from '@tauri-apps/api/core';
+import * as Sentry from "@sentry/browser";
 
 interface UpdateStatus {
   stage: 'idle' | 'scanning' | 'comparing' | 'syncing' | 'complete' | 'error';
@@ -168,6 +169,7 @@ const UpdateButton: React.FC = () => {
       }, 2000);
 
     } catch (error) {
+      Sentry.captureException(error);
       console.error('[update] Update failed:', error);
       setUpdateStatus({ 
         stage: 'error', 

@@ -6,6 +6,7 @@ import { useSelector } from 'react-redux'
 import { RootState } from '@/store/configureStore'
 import { getVersion } from '@tauri-apps/api/app'
 import { SERVER_ENDPOINTS } from '@/lib/config'
+import * as Sentry from "@sentry/browser";
 
 const Footer = () => {
   const activeEndPoint = useSelector((state: RootState) => state.settingsState.activeEndPoint)
@@ -18,6 +19,7 @@ const Footer = () => {
         const version = await getVersion()
         setCurrentVersion(version)
       } catch (error) {
+        Sentry.captureException(error);
         console.error('Failed to get version:', error)
       }
     }

@@ -13,6 +13,7 @@ import { toast } from 'sonner'
 import { getLocalVersion, getPlayerSystemInfo, getServerVersion } from '@/lib/utils'
 import { exists } from '@tauri-apps/plugin-fs'
 import axios from 'axios'
+import * as Sentry from "@sentry/browser";
 
 interface ModsConfigResponse {
     version: string
@@ -68,6 +69,7 @@ const GameButtons = () => {
                 dispatch(setIgnoredPaths(data.ignoredPaths))
             }
         } catch (error) {
+            Sentry.captureException(error);
             if (axios.isAxiosError(error)) {
                 if (error.response?.status === 401) {
                     console.error('[modsData] Unauthorized')
@@ -98,6 +100,7 @@ const GameButtons = () => {
 
             return { local, server: server?.version || null }
         } catch (error) {
+            Sentry.captureException(error);
             console.error('[versions] Error fetching versions:', error)
             return { local: null, server: null }
         }
@@ -111,6 +114,7 @@ const GameButtons = () => {
         try {
             return await exists(baseDir)
         } catch (error) {
+            Sentry.captureException(error);
             toast.error('Ошибка проверки директории')
             console.error('[checkDir] Error:', error)
             return false

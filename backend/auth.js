@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import { Pool } from 'pg';
+import * as Sentry from "@sentry/browser";
 // const login_data = [{
 //     username: "PrimalCat",
 //     uuid: "1f4f3e3e-3b7d-4e1f-9f9f-1234567890ab",
@@ -44,6 +45,7 @@ export const loginRoute = async (req, res) => {
       tokens: 0 // user.tokens, // TODO: Implement token system
     });
   } catch (error) {
+    Sentry.captureException(error);
     console.error('Database query failed', error);
     return res.status(500).json({ error: 'Database query failed' });
   }

@@ -6,6 +6,7 @@ import { useSelector } from 'react-redux'
 import { Skeleton } from '../ui/skeleton'
 import { UsersRound } from 'lucide-react'
 import { AnimatedShinyText } from '../magicui/animated-shiny-text'
+import * as Sentry from "@sentry/browser";
 
 type StatusPayload = {
   status: 'online' | 'offline'
@@ -34,6 +35,7 @@ const fetchStatus = async (endpoint: string): Promise<StatusPayload> => {
     }
     return data
   } catch (error) {
+    Sentry.captureException(error);
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       throw error; // Interceptor обработает
     }

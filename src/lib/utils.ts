@@ -4,6 +4,7 @@ import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 import { FILES_TO_SKIP_WORKTREE } from "./config";
 import { toast, type Toaster } from "sonner";
+import * as Sentry from "@sentry/browser";
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
@@ -119,6 +120,7 @@ async function checkAndUpdate(toaster: typeof toast) {
       await relaunch();
     }
   } catch (error) {
+    Sentry.captureException(error);
     toaster.error('Error while check updates:', {
       description: String(error),
     });
@@ -191,6 +193,7 @@ export const deleteFiles = async (rootDir: string,
         await remove(fullPath);
         count += 1;
       } catch (error) {
+        Sentry.captureException(error);
         console.error('[delete] failed:', relativePath, error);
       }
     }
@@ -230,6 +233,7 @@ export const getLocalVersion = async (baseDir: string): Promise<string | null> =
         console.log('Local version:', config.version);
         return config.version;
     } catch (error) {
+      Sentry.captureException(error);
         console.error('Failed to read local version:', error);
         return null;
     }
@@ -244,6 +248,7 @@ export const getServerVersion = async (versionUrl: string, authToken?: string | 
         console.log('Server version:', data.version);
         return data;
     } catch (error) {
+      Sentry.captureException(error);
         if (axios.isAxiosError(error) && error.response?.status === 401) {
             throw error;
         }
