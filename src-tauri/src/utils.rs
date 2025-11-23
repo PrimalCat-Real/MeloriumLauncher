@@ -196,7 +196,7 @@ pub async fn download_file_direct(
     path: String, 
     auth_token: Option<String>
 ) -> Result<(), String> {
-    // 1. Создаем клиент
+    // 1. Создаем клиент (максимально "тупой")
     let client = reqwest::Client::builder()
         .no_gzip()
         .no_brotli()
@@ -212,24 +212,23 @@ pub async fn download_file_direct(
         request = request.header("Authorization", format!("Bearer {}", token));
     }
 
-    // Просим сервер не сжимать
+    // Просим Identity
     request = request.header("Accept-Encoding", "identity");
 
-    // 2. Получаем ответ, но не читаем тело сразу
+    // 2. Отправляем запрос
     let mut response = request.send().await.map_err(|e| format!("Request failed: {}", e))?;
 
     if !response.status().is_success() {
         return Err(format!("Server returned status: {}", response.status()));
     }
 
-    // === ГЛАВНЫЙ ХАК ===
-    // Удаляем заголовок Content-Encoding из ответа (если он есть),
-    // чтобы reqwest даже не думал пытаться разжимать тело.
-    // Мы хотим сырые байты, какими бы они ни были.
+    // === УБИВАЕМ ЗАГОЛОВКИ СЖАТИЯ ===
+    // Это ключевой момент. Если заголовка нет, reqwest не будет пытаться разжать тело.
     response.headers_mut().remove(reqwest::header::CONTENT_ENCODING);
-    // ===================
+    response.headers_mut().remove(reqwest::header::CONTENT_LENGTH); // Длина тоже может врать при сжатии
+    // ================================
 
-    // Подготовка папок
+    // Создаем папки
     let path_obj = std::path::Path::new(&path);
     if let Some(parent) = path_obj.parent() {
         if !parent.exists() {
@@ -237,12 +236,12 @@ pub async fn download_file_direct(
         }
     }
 
-    // Удаляем старый файл с retry (fix os error 5)
+    // Удаляем старый файл с retry (от os error 5)
     if let Err(e) = remove_file_with_retry(path_obj).await {
         println!("Warning: Failed to remove old file: {}", e);
     }
 
-    // 3. Читаем и пишем
+    // 3. Сохраняем
     let mut file = tokio::fs::File::create(&path).await.map_err(|e| e.to_string())?;
     let mut stream = response.bytes_stream();
 
@@ -252,7 +251,8 @@ pub async fn download_file_direct(
                 tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await.map_err(|e| e.to_string())?;
             },
             Err(e) => {
-                // Если здесь все равно ошибка — значит это реальный обрыв сети
+                // Если ошибка все же вылетит тут, значит это РЕАЛЬНЫЙ обрыв TCP соединения,
+                // а не ошибка декодера gzip.
                 return Err(format!("Stream interrupted: {}", e));
             }
         }
