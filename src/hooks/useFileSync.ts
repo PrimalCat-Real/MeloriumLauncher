@@ -215,31 +215,43 @@ export function useFileSync() {
     return result;
   }, [isInMeloriamFolder, isModFile, isOptionalMod]);
 
-  const downloadFile = useCallback(async (
-    file: FileEntry,
-    serverUrl: string,
-    gameDir: string,
-    authToken?: string
-  ): Promise<void> => {
-    const fullUrl = `${serverUrl}${file.url}`;
-    const localPath = await join(gameDir, file.path);
+    const downloadFile = useCallback(async (
+      file: FileEntry,
+      serverUrl: string,
+      gameDir: string,
+      authToken?: string
+    ): Promise<void> => {
+      const fullUrl = `${serverUrl}${file.url}`;
+      const localPath = await join(gameDir, file.path);
 
-    const dirPath = localPath.substring(0, localPath.lastIndexOf('/'));
-    const dirExists = await exists(dirPath);
-    if (!dirExists) {
-      await mkdir(dirPath, { recursive: true });
-    }
+      // Прямая загрузка через Rust (намного быстрее и стабильнее)
+      // Retry логика: пробуем 3 раза перед падением
+      let attempts = 0;
+      const maxAttempts = 3;
 
-    const response = await axios.get(fullUrl, {
-      responseType: 'arraybuffer',
-      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-    });
+      while (attempts < maxAttempts) {
+        try {
+          await invoke('download_file_direct', {
+            url: fullUrl,
+            path: localPath,
+            authToken: authToken || null // Rust ждет Option<String>
+          });
+          return; // Успех
+        } catch (error) {
+          attempts++;
+          console.warn(`[download] Failed to download ${file.path} (Attempt ${attempts}/${maxAttempts}):`, error);
+          
+          if (attempts === maxAttempts) {
+            // На последней попытке пробрасываем ошибку наверх
+            throw new Error(`Failed to download ${file.path}: ${error}`);
+          }
+          
+          // Пауза 1 сек перед повтором
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      }
+    }, []);
 
-    await invoke('write_file_bytes', {
-      path: localPath,
-      data: Array.from(new Uint8Array(response.data))
-    });
-  }, []);
 
   const deleteFile = useCallback(async (
     filePath: string,

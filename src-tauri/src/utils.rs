@@ -1,8 +1,9 @@
 // src/utils.rs
 use std::path::{Path, PathBuf};
 use sysinfo::System;
-use tokio::fs;
+use tokio::fs::{self, File};
 use tokio::fs::read_to_string;
+use tokio::io::AsyncWriteExt;
 use tokio_stream::StreamExt;
 use walkdir::WalkDir;
 
@@ -143,4 +144,62 @@ pub async fn scan_directory_recursive(root_path: String) -> Result<Vec<String>, 
     }).await.map_err(|e| e.to_string())?;
     
     Ok(files)
+}
+
+
+#[tauri::command]
+pub async fn download_file_direct(
+    url: String, 
+    path: String, 
+    auth_token: Option<String>
+) -> Result<(), String> {
+    // 1. Создаем HTTP клиент
+    let client = reqwest::Client::new();
+    
+    // 2. Собираем запрос
+    let mut request = client.get(&url);
+    
+    if let Some(token) = auth_token {
+        request = request.header("Authorization", format!("Bearer {}", token));
+    }
+
+    // 3. Отправляем запрос (без таймаута по умолчанию, либо можно добавить timeout)
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
+
+    // Проверяем статус
+    if !response.status().is_success() {
+        return Err(format!("Server returned status: {}", response.status()));
+    }
+
+    // 4. Подготавливаем папку назначения
+    if let Some(parent) = Path::new(&path).parent() {
+        if !parent.exists() {
+            tokio::fs::create_dir_all(parent)
+                .await
+                .map_err(|e| format!("Failed to create directory: {}", e))?;
+        }
+    }
+
+    // 5. Создаем файл
+    let mut file = File::create(&path)
+        .await
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+
+    // 6. Качаем стримом (самое важное!)
+    let mut stream = response.bytes_stream();
+
+    while let Some(chunk_result) = stream.next().await {
+        let chunk = chunk_result.map_err(|e| format!("Download stream error: {}", e))?;
+        file.write_all(&chunk)
+            .await
+            .map_err(|e| format!("Write to file error: {}", e))?;
+    }
+
+    // 7. Сбрасываем буферы на диск
+    file.flush().await.map_err(|e| format!("Flush error: {}", e))?;
+    
+    Ok(())
 }
