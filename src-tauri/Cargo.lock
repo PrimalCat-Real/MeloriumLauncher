@@ -9,6 +9,7 @@ dependencies = [
  "bcrypt",
  "dotenvy",
  "elevated_process",
+ "futures-util",
  "globset",
  "ignore",
  "log",
