@@ -29,23 +29,33 @@ export function useManifest() {
     setIsLoading(true);
     setError(null);
 
-    const maxRetries = 4; // 1-3 main, 4-я через proxy [web:1]
+    const maxRetries = 4; 
     let attempt = 0;
     let lastError: any;
 
+    // Время ожидания МЕЖДУ пакетами данных (30 секунд)
+    // Если интернет пропал на 30 сек - тогда отбой. Если качает медленно но верно - ждем вечно.
+    const IDLE_TIMEOUT_MS = 30000; 
+
     while (attempt < maxRetries) {
+      attempt++;
+      
+      // Создаем контроллер отмены для текущей попытки
+      const abortController = new AbortController();
+      let timeoutId: NodeJS.Timeout;
+
+      // Функция "Убить запрос, если нет активности"
+      const refreshTimeout = () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          console.warn(`[manifest] No data received for ${IDLE_TIMEOUT_MS}ms. Aborting...`);
+          abortController.abort(); // Отменяем запрос
+        }, IDLE_TIMEOUT_MS);
+      };
+
       try {
-        attempt++;
-
-        // Для 1–3 попытки используем основной URL, на 4-й — прокси [web:1]
-        const currentBaseUrl =
-          attempt < maxRetries
-            ? serverUrl
-            : SERVER_ENDPOINTS.proxy;
-
-        console.log(
-          `[manifest] Attempt ${attempt}/${maxRetries} fetching from ${currentBaseUrl}...`
-        );
+        const currentBaseUrl = attempt < maxRetries ? serverUrl : SERVER_ENDPOINTS.proxy;
+        console.log(`[manifest] Attempt ${attempt}/${maxRetries} fetching from ${currentBaseUrl}...`);
 
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
@@ -57,42 +67,54 @@ export function useManifest() {
           headers["Authorization"] = `Bearer ${authToken}`;
         }
 
+        // Запускаем таймер смерти перед запросом
+        refreshTimeout();
+
         const response = await axios.get<LauncherManifest>(
           `${currentBaseUrl}/launcher/manifest`,
           {
             headers,
-            timeout: 15000,
-            validateStatus: (status) => status >= 200 && status < 300
+            signal: abortController.signal, // Подключаем наш контроллер
+            timeout: 0, // ОТКЛЮЧАЕМ встроенный таймаут axios (0 = бесконечно)
+            adapter: 'fetch',
+            validateStatus: (status) => status >= 200 && status < 300,
+            
+            // Самое важное: слушаем прогресс
+            onDownloadProgress: (progressEvent) => {
+              // Если пришли данные — сбрасываем таймер смерти
+              if (progressEvent.loaded > 0) {
+                refreshTimeout();
+              }
+            }
           }
         );
+        
+        // Очищаем таймер при успехе
+        clearTimeout(timeoutId!); 
 
-        console.log(
-          `[manifest] Success on attempt ${attempt}. Ver: ${response.data.version}`
-        );
-
+        console.log(`[manifest] Success on attempt ${attempt}. Ver: ${response.data.version}`);
         setIsLoading(false);
         return response.data;
+
       } catch (err: any) {
+        // Очищаем таймер при ошибке
+        clearTimeout(timeoutId!);
+
         lastError = err;
-        const isTimeout = err.code === "ECONNABORTED";
+        // Проверяем, была ли отмена вызвана нашим таймаутом
+        const isAbort = axios.isCancel(err) || err.name === 'CanceledError' || abortController.signal.aborted;
         const isNetwork = err.message === "Network Error";
 
         console.error(
-          `[manifest] Attempt ${attempt} failed. Timeout: ${isTimeout}, Network: ${isNetwork}, Msg: ${err.message}`
+          `[manifest] Attempt ${attempt} failed. Idle Timeout: ${isAbort}, Network: ${isNetwork}, Msg: ${err.message}`
         );
 
         if (attempt === maxRetries) break;
-
-        await new Promise((resolve) =>
-          setTimeout(resolve, 1000 * attempt)
-        );
+        await new Promise((resolve) => setTimeout(resolve, 1000 * attempt));
       }
     }
 
-    const finalError =
-      lastError instanceof Error
-        ? lastError
-        : new Error("Manifest fetch failed after retries");
+    const finalError = lastError instanceof Error ? lastError : new Error("Manifest fetch failed after retries");
     setIsLoading(false);
     setError(finalError);
     throw finalError;
