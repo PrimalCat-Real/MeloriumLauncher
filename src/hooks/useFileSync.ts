@@ -296,9 +296,43 @@ export function useFileSync() {
         return;
       }
 
+      console.group('🔍 SYNC PLAN DETAILS');
+      
+      if (syncResult.toDownload.length > 0) {
+        console.log(`📥 Files to DOWNLOAD (${syncResult.toDownload.length}):`);
+        console.table(syncResult.toDownload.map(f => ({ path: f.path, size: f.size })));
+      }
+
+      if (syncResult.toUpdate.length > 0) {
+        console.log(`🔄 Files to UPDATE (${syncResult.toUpdate.length}):`);
+        console.table(syncResult.toUpdate.map(f => ({ path: f.path, hash: f.hash.substring(0,8)+'...' })));
+      }
+
+      if (syncResult.toDelete.length > 0) {
+        console.log(`🗑️ Files to DELETE (${syncResult.toDelete.length}):`);
+        // console.table может тормозить если файлов тысячи, поэтому для удаления (где просто строки) 
+        // можно вывести просто список или таблицу, если их не слишком много.
+        if (syncResult.toDelete.length < 200) {
+            console.table(syncResult.toDelete.map(path => ({ path })));
+        } else {
+            console.log('(List too long, showing first 20)');
+            console.log(syncResult.toDelete.slice(0, 20));
+        }
+      }
+
+      if (syncResult.toDisable.length > 0) {
+        console.log(`🚫 Files to DISABLE (${syncResult.toDisable.length}):`);
+        console.table(syncResult.toDisable.map(path => ({ path })));
+      }
+      
+      console.groupEnd();
+      // ====================
+
       let currentOperation = 0;
 
       console.log('\n=== SYNC START ===');
+
+      
 
       // 1. Отключаем моды с недостающими зависимостями
       if (syncResult.toDisable.length > 0) {

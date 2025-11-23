@@ -153,11 +153,14 @@ pub async fn download_file_direct(
     path: String, 
     auth_token: Option<String>
 ) -> Result<(), String> {
-    // 1. Создаем клиент БЕЗ автоматического gzip (важно!)
+    // 1. Создаем клиент с ПОЛНЫМ отключением сжатия
     let client = reqwest::Client::builder()
-        .no_gzip()     // <--- ОТКЛЮЧАЕМ АВТО-РАСПАКОВКУ GZIP
-        .no_brotli()   // <--- И BROTLI ТОЖЕ
+        .no_gzip()
+        .no_brotli()
         .no_deflate()
+        // Добавляем таймауты на всякий случай (для зависших коннектов)
+        .connect_timeout(std::time::Duration::from_secs(10))
+        .timeout(std::time::Duration::from_secs(300)) // 5 минут на скачивание файла
         .build()
         .map_err(|e| format!("Client build error: {}", e))?;
     
@@ -168,8 +171,7 @@ pub async fn download_file_direct(
         request = request.header("Authorization", format!("Bearer {}", token));
     }
 
-    // ВАЖНО: Явно просим сервер НЕ сжимать ответ, если это бинарник
-    // (хотя .no_gzip() уже убирает заголовок Accept-Encoding, но для надежности)
+    // ВАЖНО: Явно просим сервер НЕ сжимать ("identity" = без кодирования)
     request = request.header("Accept-Encoding", "identity");
 
     // 3. Отправляем запрос
@@ -182,23 +184,35 @@ pub async fn download_file_direct(
         return Err(format!("Server returned status: {}", response.status()));
     }
 
-    // ... (создание папок и файла остается как было) ...
-    if let Some(parent) = Path::new(&path).parent() {
+    // Создаем папки
+    if let Some(parent) = std::path::Path::new(&path).parent() {
         if !parent.exists() {
             tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
         }
     }
 
-    let mut file = File::create(&path).await.map_err(|e| e.to_string())?;
+    // 4. Сохраняем файл
+    let mut file = tokio::fs::File::create(&path).await.map_err(|e| e.to_string())?;
     let mut stream = response.bytes_stream();
 
-    while let Some(chunk_result) = stream.next().await {
-        // Теперь ошибка "error decoding response body" исчезнет, 
-        // так как мы читаем raw bytes без попыток разжать их.
-        let chunk = chunk_result.map_err(|e| format!("Download stream error: {}", e))?;
-        file.write_all(&chunk).await.map_err(|e| e.to_string())?;
+    while let Some(chunk_result) = futures_util::StreamExt::next(&mut stream).await {
+        // Вот здесь вылетала ошибка "error decoding response body"
+        // Теперь, с "Accept-Encoding: identity" и .no_gzip(), сервер должен присылать raw bytes.
+        // Если сервер (Nginx) ИГНОРИРУЕТ это и все равно шлет gzip, 
+        // то файл сохранится сжатым (битым для игры), но ошибки загрузки НЕ БУДЕТ.
+        // Это позволит хотя бы скачать файл, а дальше хеш-проверка его отловит.
+        
+        match chunk_result {
+            Ok(chunk) => {
+                tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await.map_err(|e| e.to_string())?;
+            },
+            Err(e) => {
+                // Если ошибка все же случилась (обрыв сети), возвращаем понятный текст
+                return Err(format!("Stream interrupted: {}", e));
+            }
+        }
     }
 
-    file.flush().await.map_err(|e| e.to_string())?;
+    tokio::io::AsyncWriteExt::flush(&mut file).await.map_err(|e| e.to_string())?;
     Ok(())
 }

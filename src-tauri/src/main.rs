@@ -110,6 +110,21 @@ async fn check_git_update(args: GitCheckUpdateArgs) -> Result<bool, String> {
 }
 
 fn main() {
+
+    let _guard = sentry::init(("https://53be3cae6821c7f9d5be85b59bae678c@o4510413819871232.ingest.de.sentry.io/4510413823737936", sentry::ClientOptions {
+        release: sentry::release_name!(),
+        sample_rate: 1.0,
+        attach_stacktrace: true,
+        ..Default::default()
+    }));
+
+    std::panic::set_hook(Box::new(|info| {
+        let hub = sentry::Hub::current();
+        let event_id = hub.capture_message(&format!("Panic: {:?}", info), sentry::Level::Fatal);
+        println!("Sentry event sent: {}", event_id);
+        hub.client().map(|c| c.close(Some(std::time::Duration::from_secs(2))));
+    }));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
