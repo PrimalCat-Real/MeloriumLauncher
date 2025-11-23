@@ -11,6 +11,7 @@ import { getPublicIp, whitelistIp } from '@/lib/utils';
 import { useLocalFileHashes } from '@/hooks/useLocalFileHashes';
 import { useManifest } from '@/hooks/useManifest';
 import { useFileSync } from '@/hooks/useFileSync';
+import * as Sentry from "@sentry/browser";
 
 interface LauncStatus {
   status: "verify" | "idle" | "launching" | "syncing", 
@@ -129,6 +130,22 @@ const LaunchButton = () => {
           
         } catch (err) {
           console.error('[launch] Error:', err);
+
+          Sentry.withScope((scope) => {
+            scope.setTag("section", "game_launch");
+            scope.setContext("game_params", {
+              memory: gameParams.memoryMb,
+              username: gameParams.username
+            });
+            
+            const errString = String(err);
+            if (errString.includes("exited with code")) {
+              scope.setLevel("fatal"); 
+            }
+            
+            Sentry.captureException(err);
+          });
+
           toast.error("Ошибка при запуске", {
             description: String(err),
           });
