@@ -153,8 +153,13 @@ pub async fn download_file_direct(
     path: String, 
     auth_token: Option<String>
 ) -> Result<(), String> {
-    // 1. Создаем HTTP клиент
-    let client = reqwest::Client::new();
+    // 1. Создаем клиент БЕЗ автоматического gzip (важно!)
+    let client = reqwest::Client::builder()
+        .no_gzip()     // <--- ОТКЛЮЧАЕМ АВТО-РАСПАКОВКУ GZIP
+        .no_brotli()   // <--- И BROTLI ТОЖЕ
+        .no_deflate()
+        .build()
+        .map_err(|e| format!("Client build error: {}", e))?;
     
     // 2. Собираем запрос
     let mut request = client.get(&url);
@@ -163,43 +168,37 @@ pub async fn download_file_direct(
         request = request.header("Authorization", format!("Bearer {}", token));
     }
 
-    // 3. Отправляем запрос (без таймаута по умолчанию, либо можно добавить timeout)
+    // ВАЖНО: Явно просим сервер НЕ сжимать ответ, если это бинарник
+    // (хотя .no_gzip() уже убирает заголовок Accept-Encoding, но для надежности)
+    request = request.header("Accept-Encoding", "identity");
+
+    // 3. Отправляем запрос
     let response = request
         .send()
         .await
         .map_err(|e| format!("Request failed: {}", e))?;
 
-    // Проверяем статус
     if !response.status().is_success() {
         return Err(format!("Server returned status: {}", response.status()));
     }
 
-    // 4. Подготавливаем папку назначения
+    // ... (создание папок и файла остается как было) ...
     if let Some(parent) = Path::new(&path).parent() {
         if !parent.exists() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .map_err(|e| format!("Failed to create directory: {}", e))?;
+            tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
         }
     }
 
-    // 5. Создаем файл
-    let mut file = File::create(&path)
-        .await
-        .map_err(|e| format!("Failed to create file: {}", e))?;
-
-    // 6. Качаем стримом (самое важное!)
+    let mut file = File::create(&path).await.map_err(|e| e.to_string())?;
     let mut stream = response.bytes_stream();
 
     while let Some(chunk_result) = stream.next().await {
+        // Теперь ошибка "error decoding response body" исчезнет, 
+        // так как мы читаем raw bytes без попыток разжать их.
         let chunk = chunk_result.map_err(|e| format!("Download stream error: {}", e))?;
-        file.write_all(&chunk)
-            .await
-            .map_err(|e| format!("Write to file error: {}", e))?;
+        file.write_all(&chunk).await.map_err(|e| e.to_string())?;
     }
 
-    // 7. Сбрасываем буферы на диск
-    file.flush().await.map_err(|e| format!("Flush error: {}", e))?;
-    
+    file.flush().await.map_err(|e| e.to_string())?;
     Ok(())
 }

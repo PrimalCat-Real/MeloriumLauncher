@@ -191,7 +191,7 @@ const GameButtons = () => {
                     }
                 }
             }
-        }, 30000) // 30 секунд
+        }, 60000)
 
         return () => {
             unsubscribeMC.then(fn => fn())
