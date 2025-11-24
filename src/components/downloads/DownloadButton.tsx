@@ -16,6 +16,9 @@ import { toast } from "sonner";
 import { GDRIVE_API_KEY, GDRIVE_FILE_ID } from "@/lib/config";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { resourceDir } from "@tauri-apps/api/path";
+import { useLocalFileHashes } from "@/hooks/useLocalFileHashes";
+import { useManifest } from "@/hooks/useManifest";
+import { useFileSync } from "@/hooks/useFileSync";
 
 const ProgressPanel = lazy(() => import("../shared/ProgressPanel"));
 
@@ -25,10 +28,19 @@ const DownloadButton: React.FC = () => {
   const dispatch = useDispatch();
   const gameDir = useSelector((state: RootState) => state.downloadSlice.gameDir);
 
+  const activeEndPoint = useSelector((s: RootState) => s.settingsState.activeEndPoint);
+  const authToken = useSelector((state: RootState) => state.authSlice.authToken);
+  const ignoredPaths = useSelector((state: RootState) => state.downloadSlice.ignoredPaths);
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [started, setStarted] = useState(false);
   const [taskId, setTaskId] = useState<string>("");
   const { state, ui } = useTaskProgress(taskId);
+
+  const [verifying, setVerifying] = useState(false); 
+  const { scanDirectory } = useLocalFileHashes();
+  const { fetchManifest } = useManifest();
+  const { compareFiles, syncFiles } = useFileSync();
 
   const handleOpenDialog = useCallback(() => setDialogOpen(true), []);
   
@@ -71,6 +83,7 @@ const DownloadButton: React.FC = () => {
     const id = crypto.randomUUID();
     setTaskId(id);
     setStarted(true);
+    setVerifying(false);
 
     const zipPath = `${gameDir}/package.zip`;
     const extractTo = gameDir;
@@ -85,15 +98,48 @@ const DownloadButton: React.FC = () => {
         removeZip: true,
         taskId: id,
       });
-      // Успех: ставим статус только здесь
+       if (activeEndPoint) { // Если есть сеть/эндпоинт
+          setVerifying(true); // Меняем UI на "Проверка..."
+          console.log("[Download] Starting integrity check...");
+
+          try {
+              // Считаем хеши того, что распаковали
+              const localHashes = await scanDirectory(gameDir);
+              // Берем эталон с сервера
+              const serverManifest = await fetchManifest(activeEndPoint, authToken);
+              
+              // Сравниваем
+              const syncResult = compareFiles(
+                  localHashes, 
+                  serverManifest, 
+                  Array.isArray(ignoredPaths) ? ignoredPaths : []
+              );
+
+              // Если что-то не так (битые файлы или unzip пропустил что-то)
+              const brokenCount = syncResult.toDownload.length + syncResult.toUpdate.length;
+              
+              if (brokenCount > 0) {
+                  console.warn(`[Download] Found ${brokenCount} broken files. Auto-fixing...`);
+                  toast.info(`Найдено ${brokenCount} поврежденных файлов.`);
+                  
+                  // Запускаем syncFiles (он сам скачает нужное)
+                  await syncFiles(syncResult, activeEndPoint, gameDir, authToken);
+                  toast.success("Файлы восстановлены");
+              } else {
+                  console.log("[Download] Integrity check passed.");
+              }
+          } catch (verifyError) {
+              console.warn("Verification skipped due to error:", verifyError);
+              // Не фейлим установку, если сервер недоступен, т.к. файлы уже распакованы
+          }
+      }
       dispatch(changeDownloadStatus("downloaded"));
+      setDialogOpen(false);
     } catch (e) {
       console.error("Download error:", e);
       toast.error("Ошибка загрузки", { description: String(e) });
 
-      // --- ЛОГИКА УДАЛЕНИЯ (Tauri v2 API) ---
       try {
-        // Проверяем существование перед удалением, чтобы не ловить ошибку "file not found"
         const fileExists = await exists(zipPath);
         if (fileExists) {
            await remove(zipPath);
@@ -102,12 +148,13 @@ const DownloadButton: React.FC = () => {
       } catch (cleanupError) {
         console.warn("Не удалось удалить файл через FS плагин:", cleanupError);
       }
-      // ---------------------------------------
 
-      // Сбрасываем UI, чтобы юзер мог нажать "Скачать" снова
+      setStarted(false);
+      setVerifying(false);
       setStarted(false); 
+
     }
-  }, [dispatch, gameDir]);
+  }, [dispatch, gameDir, activeEndPoint, authToken, ignoredPaths]);
 
   const canClose = useMemo(() => state.stage === "Готово" || !!state.error, [state.error, state.stage]);
   const handleDialogOpenChange = useCallback((open: boolean) => {
@@ -118,6 +165,7 @@ const DownloadButton: React.FC = () => {
   const title = useMemo(() => {
     if (!started) return "Установка";
     if (state.error) return "Ошибка";
+    if (verifying) return "Проверка файлов";
     if (state.stage === "Готово") return "Готово";
     return "Загрузка и распаковка";
   }, [started, state.error, state.stage]);
@@ -142,17 +190,18 @@ const DownloadButton: React.FC = () => {
       <ProgressPanel
         mode="progress"
         title={title}
-        stage={state.stage}
+        stage={verifying ? "Сверка хешей" : state.stage}
         percent={state.percent}
         downloaded={ui.downloaded}
         total={ui.total}
         speed={ui.speed}
         eta={ui.eta}
         canClose={canClose}
+        hideTransferStats={verifying} 
         onClose={() => handleDialogOpenChange(false)}
       />
     );
-  }, [canClose, gameDir, handleDialogOpenChange, handlePickPath, handleStart, started, state.percent, state.stage, title, ui.downloaded, ui.eta, ui.speed, ui.total]);
+  }, [canClose, gameDir, verifying, handleDialogOpenChange, handlePickPath, handleStart, started, state.percent, state.stage, title, ui.downloaded, ui.eta, ui.speed, ui.total]);
 
   const isLocked = started && !canClose;
   return (

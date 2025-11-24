@@ -109,6 +109,7 @@ const GameButtons = () => {
     const checkBaseDirectoryPresence = async (): Promise<boolean> => {
         if (!baseDir || typeof baseDir !== 'string' || baseDir.trim() === '') {
             dispatch(resetMods())
+            dispatch(changeDownloadStatus('needFisrtInstall'))
             return false
         }
         try {
@@ -157,9 +158,10 @@ const GameButtons = () => {
         }
         
         initialize()
-    }, [baseDir, status])
+        // return status if not work
+    }, [baseDir])
 
-    // Периодическая проверка версии каждые 30 секунд
+
     useEffect(() => {
         if (!baseDir) return
 

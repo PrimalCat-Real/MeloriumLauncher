@@ -92,9 +92,11 @@ pub async fn download_from_drive_api(
         .map_err(|e| format!("Network error: {}", e))?;
 
     let total = res.content_length().unwrap_or(0);
+    
     let mut file = File::create(&destination)
         .await
         .map_err(|e| format!("Create file error: {}", e))?;
+    
     let mut stream = res.bytes_stream();
 
     let _ = window.emit(
@@ -111,12 +113,16 @@ pub async fn download_from_drive_api(
     let start = Instant::now();
     let mut downloaded: u64 = 0;
 
-    while let Some(chunk) = stream.next().await {
-        let chunk = chunk.map_err(|e| format!("Stream error: {}", e))?;
+    while let Some(chunk_result) = stream.next().await {
+        let chunk = chunk_result.map_err(|e| format!("Stream error: {}", e))?;
+        
+        let chunk_len = chunk.len() as u64;
+        
         file.write_all(&chunk)
             .await
             .map_err(|e| format!("Write error: {}", e))?;
-        downloaded += chunk.len() as u64;
+            
+        downloaded += chunk_len; 
 
         let elapsed = start.elapsed().as_secs_f64().max(0.001);
         let speed_bps = (downloaded as f64) / elapsed;
@@ -138,6 +144,7 @@ pub async fn download_from_drive_api(
         );
     }
 
+    // Важно: Flush и Sync для гарантии записи на диск перед распаковкой
     file.flush()
         .await
         .map_err(|e| format!("Flush error: {}", e))?;
@@ -166,7 +173,6 @@ pub async fn unzip_with_progress(
 ) -> Result<(), String> {
     emit_stage(&window, &task_id, "Распаковка");
 
-    // Открываем zip-файл
     let reader_file = std::fs::File::open(&source).map_err(|e| e.to_string())?;
     let mut zip_archive = ZipArchive::new(reader_file).map_err(|e| e.to_string())?;
     let total_entries = zip_archive.len();
@@ -181,6 +187,7 @@ pub async fn unzip_with_progress(
 
     for entry_index in 0..total_entries {
         let mut zip_file = zip_archive.by_index(entry_index).map_err(|e| e.to_string())?;
+        
         let output_path = match zip_file.enclosed_name() {
             Some(path) => Path::new(&destination).join(path),
             None => continue,
@@ -192,30 +199,34 @@ pub async fn unzip_with_progress(
             if let Some(parent) = output_path.parent() {
                 fs::create_dir_all(parent).map_err(|e| e.to_string())?;
             }
+            
             if output_path.exists() {
-                fs::remove_file(&output_path).map_err(|e| e.to_string())?;
+                let _ = fs::remove_file(&output_path); 
             }
+            
             let mut outfile = std::fs::File::create(&output_path).map_err(|e| e.to_string())?;
             io::copy(&mut zip_file, &mut outfile).map_err(|e| e.to_string())?;
+            
+            outfile.sync_all().map_err(|e| e.to_string())?;
         }
 
         let percent = ((entry_index + 1) as f64 / total_entries as f64) * 100.0;
-        let _ = window.emit(
-            "unzip:progress",
-            UnzipProgressPayload {
-                entriesDone: entry_index + 1,
-                percent,
-                taskId: task_id.clone(),
-            },
-        );
+        
+        if entry_index % 10 == 0 || entry_index == total_entries - 1 {
+             let _ = window.emit(
+                "unzip:progress",
+                UnzipProgressPayload {
+                    entriesDone: entry_index + 1,
+                    percent,
+                    taskId: task_id.clone(),
+                },
+            );
+        }
     }
 
-    // Критично: закрыть дескрипторы архива перед удалением исходника.
     drop(zip_archive);
 
-    // Удаляем исходный архив после успешной распаковки.
     if remove_source {
-        // Небольшой устойчивый ретрай для Windows, где файл мог ещё удерживаться антивирусом/индексатором.
         let mut last_err: Option<std::io::Error> = None;
         for _ in 0..5 {
             match fs::remove_file(&source) {
@@ -230,7 +241,7 @@ pub async fn unzip_with_progress(
             }
         }
         if let Some(err) = last_err {
-            return Err(format!("Failed to remove source archive: {}", err));
+            println!("Warning: Failed to remove source archive '{}': {}", source, err);
         }
     }
 

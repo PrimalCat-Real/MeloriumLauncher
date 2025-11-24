@@ -257,3 +257,25 @@ pub async fn download_file_direct(
         .map_err(|e| format!("Flush error ({}): {}", path, e))?;
     Ok(())
 }
+
+// #[tauri::command]
+// pub async fn download_file_resilient(
+//     url: String,
+//     path: String,
+//     auth_token: Option<String>
+// ) -> Result<(), String> {
+//     let config = DownloadConfig::builder()
+//         .retry_count(5)
+//         .timeout(std::time::Duration::from_secs(300))
+//         .build();
+
+//     let mut download = Download::new(&url, &path, config)
+//         .map_err(|e| e.to_string())?;
+
+//     if let Some(token) = auth_token {
+//         download.add_header("Authorization", &format!("Bearer {}", token));
+//     }
+
+//     download.start().await.map_err(|e| e.to_string())?;
+//     Ok(())
+// }
