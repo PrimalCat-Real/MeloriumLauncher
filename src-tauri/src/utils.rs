@@ -196,7 +196,6 @@ pub async fn download_file_direct(
     path: String, 
     auth_token: Option<String>
 ) -> Result<(), String> {
-    // 1. Создаем клиент (максимально "тупой")
     let client = reqwest::Client::builder()
         .no_gzip()
         .no_brotli()
@@ -204,31 +203,28 @@ pub async fn download_file_direct(
         .connect_timeout(std::time::Duration::from_secs(10))
         .timeout(std::time::Duration::from_secs(600))
         .build()
-        .map_err(|e| format!("Client build error: {}", e))?;
+        .map_err(|e| format!("Client build error ({}): {}", url, e))?;
     
     let mut request = client.get(&url);
-    
+
     if let Some(token) = auth_token {
         request = request.header("Authorization", format!("Bearer {}", token));
     }
 
-    // Просим Identity
     request = request.header("Accept-Encoding", "identity");
 
-    // 2. Отправляем запрос
-    let mut response = request.send().await.map_err(|e| format!("Request failed: {}", e))?;
+    let mut response = request
+        .send()
+        .await
+        .map_err(|e| format!("Request failed ({}): {}", url, e))?;
 
     if !response.status().is_success() {
-        return Err(format!("Server returned status: {}", response.status()));
+        return Err(format!("Server returned status {} for {}", response.status(), url));
     }
 
-    // === УБИВАЕМ ЗАГОЛОВКИ СЖАТИЯ ===
-    // Это ключевой момент. Если заголовка нет, reqwest не будет пытаться разжать тело.
     response.headers_mut().remove(reqwest::header::CONTENT_ENCODING);
-    response.headers_mut().remove(reqwest::header::CONTENT_LENGTH); // Длина тоже может врать при сжатии
-    // ================================
+    response.headers_mut().remove(reqwest::header::CONTENT_LENGTH);
 
-    // Создаем папки
     let path_obj = std::path::Path::new(&path);
     if let Some(parent) = path_obj.parent() {
         if !parent.exists() {
@@ -236,28 +232,28 @@ pub async fn download_file_direct(
         }
     }
 
-    // Удаляем старый файл с retry (от os error 5)
     if let Err(e) = remove_file_with_retry(path_obj).await {
-        println!("Warning: Failed to remove old file: {}", e);
+        println!("Warning: Failed to remove old file before download ({}): {}", path, e);
     }
 
-    // 3. Сохраняем
     let mut file = tokio::fs::File::create(&path).await.map_err(|e| e.to_string())?;
     let mut stream = response.bytes_stream();
 
-    while let Some(chunk_result) = futures_util::StreamExt::next(&mut stream).await {
+    while let Some(chunk_result) = stream.next().await {
         match chunk_result {
             Ok(chunk) => {
-                tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await.map_err(|e| e.to_string())?;
-            },
+                tokio::io::AsyncWriteExt::write_all(&mut file, &chunk)
+                    .await
+                    .map_err(|e| format!("Write error ({}): {}", path, e))?;
+            }
             Err(e) => {
-                // Если ошибка все же вылетит тут, значит это РЕАЛЬНЫЙ обрыв TCP соединения,
-                // а не ошибка декодера gzip.
-                return Err(format!("Stream interrupted: {}", e));
+                return Err(format!("Stream interrupted ({}): {}", url, e));
             }
         }
     }
 
-    tokio::io::AsyncWriteExt::flush(&mut file).await.map_err(|e| e.to_string())?;
+    tokio::io::AsyncWriteExt::flush(&mut file)
+        .await
+        .map_err(|e| format!("Flush error ({}): {}", path, e))?;
     Ok(())
 }

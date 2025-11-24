@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import axios from 'axios';
 import { join } from '@tauri-apps/api/path';
 import { invoke } from '@tauri-apps/api/core';
-import { remove, mkdir, exists, readDir, rename } from '@tauri-apps/plugin-fs';
+import { remove, mkdir, exists, readDir, rename, writeFile } from '@tauri-apps/plugin-fs';
 import { matchesIgnoredPath } from '@/lib/glob-utils';
 import * as Sentry from "@sentry/browser";
 
@@ -35,6 +35,30 @@ export function useFileSync() {
   const [isComparing, setIsComparing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, percent: 0 });
+
+  async function downloadFileFallbackJs(
+    file: FileEntry,
+    serverUrl: string,
+    gameDir: string,
+    authToken?: string
+  ) {
+    const fullUrl = `${serverUrl}${file.url}`;
+    const localPath = await join(gameDir, file.path);
+
+    const headers: Record<string,string> = {};
+    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+
+    const resp = await axios.get<ArrayBuffer>(fullUrl, {
+      responseType: "arraybuffer",
+      headers,
+      timeout: 120_000,
+      // CORS здесь не мешает, потому что это tauri.localhost + native fetch
+    });
+
+    // Пишем байты напрямую через plugin-fs (НЕ через invoke + Array.from)
+    const bytes = new Uint8Array(resp.data);
+    await writeFile(localPath, bytes);
+  }
 
   const isInMeloriamFolder = useCallback((path: string): boolean => {
     return path.startsWith('Melorium/');
@@ -225,31 +249,50 @@ export function useFileSync() {
       const fullUrl = `${serverUrl}${file.url}`;
       const localPath = await join(gameDir, file.path);
 
-      // Прямая загрузка через Rust (намного быстрее и стабильнее)
-      // Retry логика: пробуем 3 раза перед падением
       let attempts = 0;
       const maxAttempts = 3;
 
       while (attempts < maxAttempts) {
+        attempts++;
         try {
-          await invoke('download_file_direct', {
-            url: fullUrl,
-            path: localPath,
-            authToken: authToken || null
-          });
-          return; // Успех
-        } catch (error) {
-          Sentry.captureException(error);
-          attempts++;
-          console.warn(`[download] Failed to download ${file.path} (Attempt ${attempts}/${maxAttempts}):`, error);
-          
-          if (attempts === maxAttempts) {
-            // На последней попытке пробрасываем ошибку наверх
-            throw new Error(`Failed to download ${file.path}: ${error}`);
+          if (attempts < maxAttempts) {
+            // 1–2: Rust
+            await invoke("download_file_direct", {
+              url: fullUrl,
+              path: localPath,
+              authToken: authToken || null,
+            });
+          } else {
+            // 3: JS‑фолбек
+            await downloadFileFallbackJs(file, serverUrl, gameDir, authToken);
           }
-          
-          // Пауза 1 сек перед повтором
-          await new Promise(r => setTimeout(r, 1000));
+          return;
+        } catch (error: any) {
+          const msg = String(error?.message || error);
+
+          // Логируем в Sentry ТОЛЬКО на последней попытке, чтобы не заспамить
+          if (attempts === maxAttempts) {
+            Sentry.withScope(scope => {
+              scope.setTag("section", "file_download");
+              scope.setContext("download", {
+                path: file.path,
+                url: fullUrl,
+                attempt: attempts,
+              });
+              Sentry.captureException(error);
+            });
+          }
+
+          console.warn(
+            `[download] Failed to download ${file.path} (Attempt ${attempts}/${maxAttempts}):`,
+            msg
+          );
+
+          if (attempts === maxAttempts) {
+            throw new Error(`Failed to download ${file.path}: ${msg}`);
+          }
+
+          await new Promise(r => setTimeout(r, 1000 * attempts));
         }
       }
     }, []);
