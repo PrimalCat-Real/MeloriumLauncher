@@ -10,7 +10,7 @@ mod download;
 use download::{download_and_unzip_drive, download_from_drive_api, unzip_with_progress, hash_files_batch, get_files_meta_batch};
 mod utils;
 use utils::{
-    get_local_version_json, get_total_memory_mb, is_dir_empty, list_mod_jar_files, toggle_mod_file, write_file_bytes,delete_file,scan_directory_recursive, download_file_direct
+    get_local_version_json, get_total_memory_mb, is_dir_empty, list_mod_jar_files, toggle_mod_file, write_file_bytes,delete_file,scan_directory_recursive, download_file_direct, download_file_with_fallbacks, download_file_heavy
 };
 
 mod rungame;
@@ -155,7 +155,9 @@ fn main() {
             get_files_meta_batch,
             hash_files_batch,
             scan_directory_recursive,
-            download_file_direct
+            download_file_direct,
+            download_file_with_fallbacks,
+            download_file_heavy
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri app");

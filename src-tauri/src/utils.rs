@@ -1,11 +1,21 @@
 // src/utils.rs
 use std::path::{Path, PathBuf};
 use sysinfo::System;
+use tauri::{Emitter, Window};
 use tokio::fs::{self, File};
 use tokio::fs::read_to_string;
 use tokio::io::AsyncWriteExt;
 use tokio_stream::StreamExt;
 use walkdir::WalkDir;
+use reqwest::{Client, header};
+use std::time::Duration;
+#[derive(Debug)]
+struct DownloadProgress {
+    downloaded: u64,
+    total: u64,
+    speed: f64,
+}
+
 
 #[tauri::command]
 pub async fn get_local_version_json(path: String) -> Result<String, String> {
@@ -279,3 +289,296 @@ pub async fn download_file_direct(
 //     download.start().await.map_err(|e| e.to_string())?;
 //     Ok(())
 // }
+
+
+#[tauri::command]
+pub async fn download_file_with_fallbacks(
+    window: tauri::Window,
+    url: String,
+    path: String,
+    auth_token: Option<String>,
+    task_id: String,
+) -> Result<(), String> {
+    // Fallback 1: Long timeout + chunked streaming
+    let result = download_with_streaming(&window, &url, &path, &auth_token, &task_id, 300).await;
+    
+    if result.is_ok() {
+        return result;
+    }
+    
+    println!("⚠️ Fallback 1 failed, trying Range requests...");
+    
+    // Fallback 2: Range requests with retries
+    let result = download_with_ranges(&window, &url, &path, &auth_token, &task_id).await;
+    
+    if result.is_ok() {
+        return result;
+    }
+    
+    println!("⚠️ Fallback 2 failed, trying minimal config...");
+    
+    // Fallback 3: Minimal client config with aggressive timeouts
+    download_minimal(&window, &url, &path, &auth_token, &task_id).await
+}
+
+async fn download_with_streaming(
+    window: &tauri::Window,
+    url: &str,
+    path: &str,
+    auth_token: &Option<String>,
+    task_id: &str,
+    timeout_secs: u64,
+) -> Result<(), String> {
+    let client = Client::builder()
+        .timeout(Duration::from_secs(timeout_secs))
+        .connect_timeout(Duration::from_secs(30))
+        .read_timeout(Duration::from_secs(120))
+        .tcp_keepalive(Duration::from_secs(60))
+        .pool_idle_timeout(Duration::from_secs(90))
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    let mut request = client.get(url);
+    
+    if let Some(token) = auth_token {
+        request = request.header("Authorization", format!("Bearer {}", token));
+    }
+    
+    let mut response = request.send().await.map_err(|e| e.to_string())?;
+    
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status()));
+    }
+    
+    let total = response.content_length().unwrap_or(0);
+    let mut downloaded: u64 = 0;
+    let start = std::time::Instant::now();
+    
+    // Create file
+    let path_obj = std::path::Path::new(path);
+    if let Some(parent) = path_obj.parent() {
+        tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
+    }
+    
+    let mut file = tokio::fs::File::create(path).await.map_err(|e| e.to_string())?;
+    
+    // Download in chunks
+    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+        file.write_all(&chunk).await.map_err(|e| e.to_string())?;
+        
+        downloaded += chunk.len() as u64;
+        
+        // Calculate speed
+        let elapsed = start.elapsed().as_secs_f64();
+        let speed = if elapsed > 0.0 {
+            downloaded as f64 / elapsed / 1024.0 / 1024.0 // MB/s
+        } else {
+            0.0
+        };
+        
+        // Emit progress with BYTES INFO
+        let _ = window.emit(&format!("download-progress-{}", task_id), serde_json::json!({
+            "downloaded": downloaded,
+            "total": total,
+            "percent": if total > 0 { (downloaded as f64 / total as f64 * 100.0) as u8 } else { 0 },
+            "speed": format!("{:.2} MB/s", speed),
+            "bytes_info": format!("{} / {} bytes", downloaded, total), // DEBUG INFO
+        }));
+    }
+    
+    file.flush().await.map_err(|e| e.to_string())?;
+    
+    println!("✅ Downloaded {} bytes to {}", downloaded, path);
+    
+    Ok(())
+}
+
+async fn download_with_ranges(
+    window: &tauri::Window,
+    url: &str,
+    path: &str,
+    auth_token: &Option<String>,
+    task_id: &str,
+) -> Result<(), String> {
+    const CHUNK_SIZE: u64 = 5 * 1024 * 1024; // 5MB chunks
+    
+    let client = Client::builder()
+        .timeout(Duration::from_secs(180))
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    // Get file size first
+    let mut head_req = client.head(url);
+    if let Some(token) = auth_token {
+        head_req = head_req.header("Authorization", format!("Bearer {}", token));
+    }
+    
+    let head_resp = head_req.send().await.map_err(|e| e.to_string())?;
+    let total_size = head_resp
+        .headers()
+        .get(header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<u64>().ok())
+        .ok_or("Cannot get file size")?;
+    
+    println!("📦 File size: {} bytes, downloading in {} MB chunks", total_size, CHUNK_SIZE / 1024 / 1024);
+    
+    let path_obj = std::path::Path::new(path);
+    if let Some(parent) = path_obj.parent() {
+        tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
+    }
+    
+    let mut file = tokio::fs::File::create(path).await.map_err(|e| e.to_string())?;
+    let mut downloaded: u64 = 0;
+    let start = std::time::Instant::now();
+    
+    // Download in ranges with retries
+    while downloaded < total_size {
+        let end = std::cmp::min(downloaded + CHUNK_SIZE - 1, total_size - 1);
+        let range = format!("bytes={}-{}", downloaded, end);
+        
+        let mut attempts = 0;
+        let max_attempts = 5;
+        
+        loop {
+            attempts += 1;
+            
+            let mut req = client.get(url).header(header::RANGE, &range);
+            if let Some(token) = auth_token {
+                req = req.header("Authorization", format!("Bearer {}", token));
+            }
+            
+            match req.send().await {
+                Ok(resp) if resp.status().is_success() || resp.status() == 206 => {
+                    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+                    file.write_all(&bytes).await.map_err(|e| e.to_string())?;
+                    
+                    downloaded += bytes.len() as u64;
+                    
+                    let elapsed = start.elapsed().as_secs_f64();
+                    let speed = if elapsed > 0.0 { downloaded as f64 / elapsed / 1024.0 / 1024.0 } else { 0.0 };
+                    
+                    let _ = window.emit(&format!("download-progress-{}", task_id), serde_json::json!({
+                        "downloaded": downloaded,
+                        "total": total_size,
+                        "percent": (downloaded as f64 / total_size as f64 * 100.0) as u8,
+                        "speed": format!("{:.2} MB/s", speed),
+                        "bytes_info": format!("{} / {} bytes (range: {})", downloaded, total_size, range),
+                    }));
+                    
+                    break; // Success, move to next chunk
+                }
+                Err(e) if attempts < max_attempts => {
+                    println!("⚠️ Range request failed (attempt {}/{}): {}", attempts, max_attempts, e);
+                    tokio::time::sleep(Duration::from_secs(2u64.pow(attempts - 1))).await; // Exponential backoff
+                    continue;
+                }
+                Err(e) => {
+                    return Err(format!("Range request failed after {} attempts: {}", max_attempts, e));
+                }
+                Ok(resp) => {
+                    return Err(format!("Unexpected status: {}", resp.status()));
+                }
+            }
+        }
+    }
+    
+    file.flush().await.map_err(|e| e.to_string())?;
+    println!("✅ Downloaded {} bytes with ranges", downloaded);
+    
+    Ok(())
+}
+
+async fn download_minimal(
+    window: &tauri::Window,
+    url: &str,
+    path: &str,
+    auth_token: &Option<String>,
+    task_id: &str,
+) -> Result<(), String> {
+    // Minimal config for worst connections
+    let client = Client::builder()
+        .timeout(Duration::from_secs(600)) // 10 min total
+        .connect_timeout(Duration::from_secs(60))
+        .pool_max_idle_per_host(0)
+        .build()
+        .map_err(|e| e.to_string())?;
+    
+    let mut req = client.get(url);
+    if let Some(token) = auth_token {
+        req = req.header("Authorization", format!("Bearer {}", token));
+    }
+    
+    let bytes = req.send().await.map_err(|e| e.to_string())?.bytes().await.map_err(|e| e.to_string())?;
+    
+    let path_obj = std::path::Path::new(path);
+    if let Some(parent) = path_obj.parent() {
+        tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
+    }
+    
+    tokio::fs::write(path, &bytes).await.map_err(|e| e.to_string())?;
+    
+    println!("✅ Downloaded {} bytes (minimal fallback)", bytes.len());
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn download_file_heavy(
+    window: Window,
+    url: String,
+    path: String,
+    auth_token: Option<String>,
+    task_id: String,
+) -> Result<(), String> {
+    println!("🛡️ Starting HEAVY download for: {}", url);
+
+    // 1. Конфігурація клієнта для ДУЖЕ поганого інтернету
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(300)) // 5 хвилин загальний таймаут
+        .connect_timeout(Duration::from_secs(60)) // Довге з'єднання
+        .read_timeout(Duration::from_secs(120)) // Чекаємо пакети до 2 хвилин
+        .tcp_keepalive(Duration::from_secs(30)) // Пінгуємо з'єднання
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut request = client.get(&url);
+    if let Some(token) = auth_token {
+        request = request.header("Authorization", format!("Bearer {}", token));
+    }
+
+    let mut response = request.send().await.map_err(|e| format!("Connection failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("HTTP Error: {}", response.status()));
+    }
+
+    let total_size = response.content_length().unwrap_or(0);
+    
+    // Створення директорій
+    if let Some(parent) = std::path::Path::new(&path).parent() {
+        tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
+    }
+
+    let mut file = tokio::fs::File::create(&path).await.map_err(|e| e.to_string())?;
+    let mut downloaded: u64 = 0;
+
+    // 2. Стрімінг чанками з детальним логуванням
+    while let Some(chunk) = response.chunk().await.map_err(|e| format!("Chunk error: {}", e))? {
+        file.write_all(&chunk).await.map_err(|e| format!("Write error: {}", e))?;
+        downloaded += chunk.len() as u64;
+
+        // 3. Відправка події з БАЙТАМИ (як ти просив для дебагу)
+        let _ = window.emit(&format!("download-progress-{}", task_id), serde_json::json!({
+            "downloaded": downloaded,
+            "total": total_size,
+            "bytes_info": format!("{}/{}", downloaded, total_size), // <--- ДЛЯ ДЕБАГУ
+            "percent": if total_size > 0 { (downloaded as f64 / total_size as f64 * 100.0) as u8 } else { 0 }
+        }));
+    }
+
+    file.flush().await.map_err(|e| e.to_string())?;
+    
+    println!("✅ Heavy download finished: {} bytes", downloaded);
+    Ok(())
+}

@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { remove, mkdir, exists, readDir, rename, writeFile } from '@tauri-apps/plugin-fs';
 import { matchesIgnoredPath } from '@/lib/glob-utils';
 import * as Sentry from "@sentry/browser";
+import { listen } from '@tauri-apps/api/event';
 
 interface FileEntry {
   path: string;
@@ -36,28 +37,23 @@ export function useFileSync() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, percent: 0 });
 
-  async function downloadFileFallbackJs(
-    file: FileEntry,
-    serverUrl: string,
-    gameDir: string,
-    authToken?: string
-  ) {
-    const fullUrl = `${serverUrl}${file.url}`;
-    const localPath = await join(gameDir, file.path);
+  
+  async function downloadFileFallbackJs(url: string, path: string, token?: string) {
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    const headers: Record<string,string> = {};
-    if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
+      const response = await fetch(url, { 
+          method: 'GET', 
+          headers,
+      });
 
-    const resp = await axios.get<ArrayBuffer>(fullUrl, {
-      responseType: "arraybuffer",
-      headers,
-      timeout: 120_000,
-      // CORS здесь не мешает, потому что это tauri.localhost + native fetch
-    });
+      if (!response.ok) throw new Error(`JS Download HTTP ${response.status}`);
 
-    // Пишем байты напрямую через plugin-fs (НЕ через invoke + Array.from)
-    const bytes = new Uint8Array(resp.data);
-    await writeFile(localPath, bytes);
+      const buffer = await response.arrayBuffer();
+      const uint8Array = new Uint8Array(buffer);
+
+      await writeFile(path, uint8Array);
+      console.log(`[JS Fallback] Saved ${uint8Array.length} bytes to ${path}`);
   }
 
   const isInMeloriamFolder = useCallback((path: string): boolean => {
@@ -240,62 +236,158 @@ export function useFileSync() {
     return result;
   }, [isInMeloriamFolder, isModFile, isOptionalMod]);
 
+    // const downloadFile = useCallback(async (
+    //   file: FileEntry,
+    //   serverUrl: string,
+    //   gameDir: string,
+    //   authToken?: string
+    // ): Promise<void> => {
+    //   const fullUrl = `${serverUrl}${file.url}`;
+    //   const localPath = await join(gameDir, file.path);
+    //   const taskId = crypto.randomUUID(); // ID для відстеження подій "важкого" завантаження
+
+    //   let attempts = 0;
+    //   const maxAttempts = 3;
+
+    //   // Слухаємо події тільки для важкого методу (3-тя спроба)
+    //   const unlistenPromise = listen(`download-progress-${taskId}`, (event: any) => {
+    //     // Тут ти отримаєш детальні байти для дебагу
+    //     console.log(`[Debug] ${file.path}:`, event.payload.bytes_info); 
+    //   });
+
+    //   while (attempts < maxAttempts) {
+    //     attempts++;
+    //     try {
+    //       console.log(`[download] ${file.path} - Attempt ${attempts}/${maxAttempts}`);
+
+    //       if (attempts === 1) {
+    //         // === МЕТОД 1: Швидкий Rust (стандартний) ===
+    //         await invoke("download_file_direct", {
+    //           url: fullUrl,
+    //           path: localPath,
+    //           authToken: authToken || null,
+    //         });
+
+    //       } else if (attempts === 2) {
+    //         // === МЕТОД 2: JS Fallback (через браузерний стек) ===
+    //         // Використовуємо fetch, бо він краще проходить деякі проксі ніж Rust
+    //         await downloadFileFallbackJs(fullUrl, localPath, authToken);
+
+    //       } else {
+    //         await invoke("download_file_heavy", {
+    //             url: fullUrl,
+    //             path: localPath,
+    //             authToken: authToken || null,
+    //             taskId: taskId 
+    //         });
+    //       }
+
+    //       // Якщо успішно - виходимо
+    //       (await unlistenPromise)(); // Відписуємось від подій
+    //       return;
+
+    //     } catch (error: any) {
+    //       const msg = String(error?.message || error);
+
+    //       // Логування помилок
+    //       console.warn(`[download] Failed attempt ${attempts}: ${msg}`);
+
+    //       // Sentry тільки на останній помилці
+    //       if (attempts === maxAttempts) {
+    //         (await unlistenPromise)(); // Очистка лісенера
+            
+    //         Sentry.withScope(scope => {
+    //           scope.setTag("section", "file_download");
+    //           scope.setContext("download", {
+    //             path: file.path,
+    //             url: fullUrl,
+    //             method: "ALL_FAILED",
+    //           });
+    //           Sentry.captureException(error);
+    //         });
+            
+    //         throw new Error(`Failed to download ${file.path} after 3 methods: ${msg}`);
+    //       }
+
+    //       // Пауза перед наступною спробою (1с, 2с...)
+    //       await new Promise(r => setTimeout(r, 1000 * attempts));
+    //     }
+    //   }
+    // }, []);
+
     const downloadFile = useCallback(async (
-      file: FileEntry,
-      serverUrl: string,
-      gameDir: string,
-      authToken?: string
-    ): Promise<void> => {
-      const fullUrl = `${serverUrl}${file.url}`;
-      const localPath = await join(gameDir, file.path);
+    file: FileEntry,
+    serverUrl: string,
+    gameDir: string,
+    authToken?: string
+  ): Promise<void> => {
+    const fullUrl = `${serverUrl}${file.url}`;
+    const localPath = await join(gameDir, file.path);
+    const taskId = crypto.randomUUID(); // ID для трекінгу подій
 
-      let attempts = 0;
-      const maxAttempts = 3;
+    let attempts = 0;
+    const maxAttempts = 3; // 3 спроби, але остання включає в себе ще 3 стратегії
 
-      while (attempts < maxAttempts) {
-        attempts++;
-        try {
-          if (attempts < maxAttempts) {
-            // 1–2: Rust
-            await invoke("download_file_direct", {
+    const unlistenPromise = listen(`download-progress-${taskId}`, (event: any) => {
+       console.log(`[SlowNet] ${file.path}:`, event.payload.bytes_info); 
+    });
+
+    while (attempts < maxAttempts) {
+      attempts++;
+      try {
+        if (attempts > 1) console.log(`[download] ${file.path} - Retry ${attempts}/${maxAttempts}...`);
+
+        if (attempts === 1) {
+          await invoke("download_file_direct", {
+            url: fullUrl,
+            path: localPath,
+            authToken: authToken || null,
+          });
+
+        } else if (attempts === 2) {
+          await downloadFileFallbackJs(fullUrl, localPath, authToken);
+
+        } else {
+          await invoke("download_file_with_fallbacks", {
               url: fullUrl,
               path: localPath,
               authToken: authToken || null,
-            });
-          } else {
-            // 3: JS‑фолбек
-            await downloadFileFallbackJs(file, serverUrl, gameDir, authToken);
-          }
-          return;
-        } catch (error: any) {
-          const msg = String(error?.message || error);
-
-          // Логируем в Sentry ТОЛЬКО на последней попытке, чтобы не заспамить
-          if (attempts === maxAttempts) {
-            Sentry.withScope(scope => {
-              scope.setTag("section", "file_download");
-              scope.setContext("download", {
-                path: file.path,
-                url: fullUrl,
-                attempt: attempts,
-              });
-              Sentry.captureException(error);
-            });
-          }
-
-          console.warn(
-            `[download] Failed to download ${file.path} (Attempt ${attempts}/${maxAttempts}):`,
-            msg
-          );
-
-          if (attempts === maxAttempts) {
-            throw new Error(`Failed to download ${file.path}: ${msg}`);
-          }
-
-          await new Promise(r => setTimeout(r, 1000 * attempts));
+              taskId: taskId
+          });
         }
+
+        (await unlistenPromise)(); 
+        return;
+
+      } catch (error: any) {
+        const msg = String(error?.message || error);
+
+        console.warn(`[download] Attempt ${attempts} failed for ${file.path}: ${msg}`);
+
+        // Sentry: Логуємо тільки якщо впали ВЗАГАЛІ всі методи (тобто після 3-ї спроби)
+        if (attempts === maxAttempts) {
+          (await unlistenPromise)(); // Чистимо лісенер
+          
+          Sentry.withScope(scope => {
+            scope.setTag("section", "file_download");
+            scope.setContext("download", {
+              path: file.path,
+              url: fullUrl,
+              method: "ALL_METHODS_FAILED",
+              lastError: msg
+            });
+            Sentry.captureException(error);
+          });
+          
+          // Викидаємо помилку, щоб зупинити синхронізацію цього файлу
+          throw new Error(`Failed to download ${file.path}: ${msg}`);
+        }
+
+        // Експоненційна затримка: 1с, 2с...
+        await new Promise(r => setTimeout(r, 1000 * attempts));
       }
-    }, []);
+    }
+  }, []);
 
 
   const deleteFile = useCallback(async (
