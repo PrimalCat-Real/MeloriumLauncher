@@ -300,7 +300,7 @@ pub async fn download_file_with_fallbacks(
     task_id: String,
 ) -> Result<(), String> {
     // Fallback 1: Long timeout + chunked streaming
-    let result = download_with_streaming(&window, &url, &path, &auth_token, &task_id, 300).await;
+    let result = download_with_streaming(&window, &url, &path, &auth_token, &task_id, 600).await;
     
     if result.is_ok() {
         return result;
@@ -331,7 +331,7 @@ async fn download_with_streaming(
 ) -> Result<(), String> {
     let client = Client::builder()
         .timeout(Duration::from_secs(timeout_secs))
-        .connect_timeout(Duration::from_secs(30))
+        .connect_timeout(Duration::from_secs(60))
         .read_timeout(Duration::from_secs(120))
         .tcp_keepalive(Duration::from_secs(60))
         .pool_idle_timeout(Duration::from_secs(90))
@@ -346,6 +346,11 @@ async fn download_with_streaming(
     
     let mut response = request.send().await.map_err(|e| e.to_string())?;
     
+    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return Err("UNAUTHORIZED_401".to_string());
+    }
+
+
     if !response.status().is_success() {
         return Err(format!("HTTP {}", response.status()));
     }
@@ -402,27 +407,38 @@ async fn download_with_ranges(
 ) -> Result<(), String> {
     const CHUNK_SIZE: u64 = 5 * 1024 * 1024; // 5MB chunks
     
-    let client = Client::builder()
-        .timeout(Duration::from_secs(180))
+    // Налаштування клієнта з агресивними таймаутами для Range-запитів
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(600))      // 10 хв на чанк (з запасом)
+        .connect_timeout(Duration::from_secs(60)) // 60 сек на коннект
+        .read_timeout(Duration::from_secs(300))   // 5 хв чекаємо дані в потоці
+        .tcp_keepalive(Duration::from_secs(60))   // KeepAlive
         .build()
         .map_err(|e| e.to_string())?;
     
-    // Get file size first
+    // 1. Отримуємо розмір файлу (HEAD запит)
     let mut head_req = client.head(url);
     if let Some(token) = auth_token {
         head_req = head_req.header("Authorization", format!("Bearer {}", token));
     }
     
     let head_resp = head_req.send().await.map_err(|e| e.to_string())?;
+    
+    // Перевірка на 401 одразу
+    if head_resp.status() == reqwest::StatusCode::UNAUTHORIZED {
+        return Err("UNAUTHORIZED_401".to_string());
+    }
+
     let total_size = head_resp
         .headers()
         .get(header::CONTENT_LENGTH)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.parse::<u64>().ok())
-        .ok_or("Cannot get file size")?;
+        .ok_or("Cannot get file size from HEAD request")?;
     
-    println!("📦 File size: {} bytes, downloading in {} MB chunks", total_size, CHUNK_SIZE / 1024 / 1024);
+    println!("📦 [Range] File size: {} bytes, downloading in {} MB chunks", total_size, CHUNK_SIZE / 1024 / 1024);
     
+    // Створення директорій та файлу
     let path_obj = std::path::Path::new(path);
     if let Some(parent) = path_obj.parent() {
         tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
@@ -432,13 +448,13 @@ async fn download_with_ranges(
     let mut downloaded: u64 = 0;
     let start = std::time::Instant::now();
     
-    // Download in ranges with retries
+    // Цикл завантаження по діапазонах (Ranges)
     while downloaded < total_size {
         let end = std::cmp::min(downloaded + CHUNK_SIZE - 1, total_size - 1);
         let range = format!("bytes={}-{}", downloaded, end);
         
         let mut attempts = 0;
-        let max_attempts = 5;
+        let max_attempts = 10; // Збільшили кількість спроб для чанка до 10 (для поганої мережі)
         
         loop {
             attempts += 1;
@@ -448,36 +464,79 @@ async fn download_with_ranges(
                 req = req.header("Authorization", format!("Bearer {}", token));
             }
             
-            match req.send().await {
-                Ok(resp) if resp.status().is_success() || resp.status() == 206 => {
-                    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
-                    file.write_all(&bytes).await.map_err(|e| e.to_string())?;
-                    
-                    downloaded += bytes.len() as u64;
-                    
-                    let elapsed = start.elapsed().as_secs_f64();
-                    let speed = if elapsed > 0.0 { downloaded as f64 / elapsed / 1024.0 / 1024.0 } else { 0.0 };
-                    
-                    let _ = window.emit(&format!("download-progress-{}", task_id), serde_json::json!({
-                        "downloaded": downloaded,
-                        "total": total_size,
-                        "percent": (downloaded as f64 / total_size as f64 * 100.0) as u8,
-                        "speed": format!("{:.2} MB/s", speed),
-                        "bytes_info": format!("{} / {} bytes (range: {})", downloaded, total_size, range),
-                    }));
-                    
-                    break; // Success, move to next chunk
+            println!("⬇️ [Range] Requesting {}. Attempt {}/{}", range, attempts, max_attempts);
+
+            let response_result = req.send().await;
+
+            match response_result {
+                // Спеціальна обробка 401
+                Ok(resp) if resp.status() == reqwest::StatusCode::UNAUTHORIZED => {
+                    return Err("UNAUTHORIZED_401".to_string());
                 }
+
+                // Успішне з'єднання (200 або 206 Partial Content)
+                Ok(resp) if resp.status().is_success() || resp.status() == reqwest::StatusCode::PARTIAL_CONTENT => {
+                    
+                    // !!! КЛЮЧОВА ЗМІНА: Обережне читання тіла !!!
+                    // Замість resp.bytes().await?, який вбиває процес при помилці,
+                    // ми обробляємо помилку тут, щоб зробити continue loop.
+                    
+                    let bytes_result = resp.bytes().await;
+
+                    match bytes_result {
+                        Ok(bytes) => {
+                            // Успішно скачали чанк - пишемо на диск
+                            if let Err(e) = file.write_all(&bytes).await {
+                                return Err(format!("File write error at {}: {}", downloaded, e));
+                            }
+                            
+                            downloaded += bytes.len() as u64;
+                            
+                            // Розрахунок швидкості
+                            let elapsed = start.elapsed().as_secs_f64();
+                            let speed = if elapsed > 0.0 { downloaded as f64 / elapsed / 1024.0 / 1024.0 } else { 0.0 };
+                            
+                            // Відправка прогресу в JS
+                            let _ = window.emit(&format!("download-progress-{}", task_id), serde_json::json!({
+                                "downloaded": downloaded,
+                                "total": total_size,
+                                "percent": (downloaded as f64 / total_size as f64 * 100.0) as u8,
+                                "speed": format!("{:.2} MB/s", speed),
+                                "bytes_info": format!("{} / {} bytes (range: {})", downloaded, total_size, range),
+                            }));
+                            
+                            break; // Чанк успішний, виходимо з loop retry і переходимо до наступного чанка
+                        },
+                        Err(e) => {
+                            // Ось тут ловимо "error decoding response body" / "stream interrupted"
+                            println!("⚠️ Body read failed (attempt {}/{}): {}", attempts, max_attempts, e);
+                            
+                            if attempts >= max_attempts {
+                                return Err(format!("Failed to read body chunk {} after {} attempts: {}", range, max_attempts, e));
+                            }
+                            
+                            // Пауза перед ретраєм ЦЬОГО Ж чанка
+                            tokio::time::sleep(Duration::from_secs(2)).await;
+                            continue; 
+                        }
+                    }
+                }
+
+                // Помилки з'єднання (timeout, DNS і т.д.)
                 Err(e) if attempts < max_attempts => {
-                    println!("⚠️ Range request failed (attempt {}/{}): {}", attempts, max_attempts, e);
-                    tokio::time::sleep(Duration::from_secs(2u64.pow(attempts - 1))).await; // Exponential backoff
+                    println!("⚠️ Connection failed (attempt {}/{}): {}", attempts, max_attempts, e);
+                    tokio::time::sleep(Duration::from_secs(2u64.pow(attempts - 1))).await; // Backoff
                     continue;
                 }
+
+                // Фатальні помилки після всіх спроб
                 Err(e) => {
                     return Err(format!("Range request failed after {} attempts: {}", max_attempts, e));
                 }
+                
+                // Інші HTTP помилки (404, 500...)
                 Ok(resp) => {
-                    return Err(format!("Unexpected status: {}", resp.status()));
+                    return Err(format!("Unexpected status code: {}", resp.status()));
                 }
             }
         }
@@ -533,7 +592,6 @@ pub async fn download_file_heavy(
 ) -> Result<(), String> {
     println!("🛡️ Starting HEAVY download for: {}", url);
 
-    // 1. Конфігурація клієнта для ДУЖЕ поганого інтернету
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(300)) // 5 хвилин загальний таймаут
         .connect_timeout(Duration::from_secs(60)) // Довге з'єднання

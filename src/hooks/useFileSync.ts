@@ -6,6 +6,9 @@ import { remove, mkdir, exists, readDir, rename, writeFile } from '@tauri-apps/p
 import { matchesIgnoredPath } from '@/lib/glob-utils';
 import * as Sentry from "@sentry/browser";
 import { listen } from '@tauri-apps/api/event';
+import { silentRelogin } from '@/lib/auth';
+import { RootState } from '@/store/configureStore';
+import { useSelector } from 'react-redux';
 
 interface FileEntry {
   path: string;
@@ -36,7 +39,7 @@ export function useFileSync() {
   const [isComparing, setIsComparing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, percent: 0 });
-
+  const activeEndPoint = useSelector((state: RootState) => state.settingsState.activeEndPoint)
   
   async function downloadFileFallbackJs(url: string, path: string, token?: string) {
       const headers: Record<string, string> = {};
@@ -315,13 +318,15 @@ export function useFileSync() {
     //   }
     // }, []);
 
-    const downloadFile = useCallback(async (
+  const downloadFile = useCallback(async (
     file: FileEntry,
     serverUrl: string,
     gameDir: string,
     authToken?: string
   ): Promise<void> => {
     const fullUrl = `${serverUrl}${file.url}`;
+
+    console.log(`[download] Starting download for ${file.path} from ${fullUrl}`);
     const localPath = await join(gameDir, file.path);
     const taskId = crypto.randomUUID(); // ID для трекінгу подій
 
@@ -362,6 +367,27 @@ export function useFileSync() {
       } catch (error: any) {
         const msg = String(error?.message || error);
 
+
+         const isAuthError = msg.includes("UNAUTHORIZED_401") || msg.includes("HTTP 401") || msg.includes("401");
+
+        if (isAuthError) {
+            console.warn(`[download] ⚠️ Token 401. Calling silentRelogin...`);
+            
+            try {
+                const newToken = await silentRelogin(activeEndPoint);
+                
+                if (newToken) {
+                    console.log('[download] Relogin success! Retrying...');
+                    authToken = newToken; // Оновлюємо токен локально для цього циклу
+                    attempts--; // Даємо ще один шанс
+                    continue;
+                }
+            } catch (reloginErr) {
+                console.error('[download] Relogin failed:', reloginErr);
+                (await unlistenPromise)();
+                throw new Error("Session expired. Auto-relogin failed.");
+            }
+        }
         console.warn(`[download] Attempt ${attempts} failed for ${file.path}: ${msg}`);
 
         // Sentry: Логуємо тільки якщо впали ВЗАГАЛІ всі методи (тобто після 3-ї спроби)
