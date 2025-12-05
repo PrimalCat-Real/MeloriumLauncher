@@ -7,20 +7,22 @@ import { configureStore } from '@reduxjs/toolkit'
 import modsSlice from './slice/modsSlice'
 import settingsSlice from './slice/settingsSlice'
 import authSlice from './slice/authSlice'
+import { sessionReducer } from '@/entities/session'
 
 
 const rootReducer = combineReducers({
   downloadSlice,
   modsSlice,
   settingsState: settingsSlice,
-  authSlice
+  authSlice,
+  session: sessionReducer,
 })
 
 const persistConfig = {
   key: 'root',
   storage,
   
-  whitelist: ['downloadSlice', 'settingsState', 'authSlice'], 
+  whitelist: ['downloadSlice', 'settingsState', 'authSlice', "session"], 
 }
 
 const persistedReducer = persistReducer(persistConfig, rootReducer)

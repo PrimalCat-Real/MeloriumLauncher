@@ -16,15 +16,15 @@ import {
   VisibilityState,
   flexRender,
 } from "@tanstack/react-table"
-import { Switch } from "@/components/ui/switch"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table'
-import { Input } from '../ui/input'
+import { Switch } from "@/shared/ui/switch"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../shared/ui/table'
+import { Input } from '../../shared/ui/input'
 import { ArrowDownAZ, ArrowDownZA, ArrowUpDown, List, Search } from 'lucide-react'
 import { invoke } from '@tauri-apps/api/core'
 import { toast } from 'sonner'
 import path from 'path'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
-import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../shared/ui/tooltip'
+import { Button } from '../../shared/ui/button'
 import { cn, getDependants, getParents } from '@/lib/utils'
 import ModToggle from './ModToggle'
 import ModDownloader from './ModDownloader'

@@ -3,7 +3,7 @@
 import axios from 'axios'
 import React, { JSX, Suspense, useMemo } from 'react'
 import { useSelector } from 'react-redux'
-import { Skeleton } from '../ui/skeleton'
+import { Skeleton } from '../../shared/ui/skeleton'
 import { UsersRound } from 'lucide-react'
 import { AnimatedShinyText } from '../magicui/animated-shiny-text'
 import * as Sentry from "@sentry/browser";

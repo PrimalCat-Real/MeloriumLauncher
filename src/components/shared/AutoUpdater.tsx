@@ -5,7 +5,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { check } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import { toast } from 'sonner';
-import { Progress } from '@/components/ui/progress';
+import { Progress } from '@/shared/ui/progress';
 
 const AutoUpdater = (): null => {
   const startedRef = useRef(false);

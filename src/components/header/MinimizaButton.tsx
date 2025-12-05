@@ -1,6 +1,6 @@
 'use client'
 import React from 'react'
-import { Button } from '../ui/button'
+import { Button } from '../../shared/ui/button'
 import { Minus } from 'lucide-react'
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { cn } from '@/lib/utils';

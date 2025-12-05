@@ -1,4 +1,4 @@
-
+'use client'
 import Image from "next/image";
 import title from '@/assets/images/title.png'
 import GameButtons from "@/components/downloads/GameButtons";
@@ -26,7 +26,7 @@ export default function Home() {
         <VersionInfoCard></VersionInfoCard>
       </div>
       <ActiveEndpointSelector></ActiveEndpointSelector>
-        {/* <Download></Download>
+      {/* <Download></Download>
         <LaunchGame></LaunchGame> */}
     </main>
   );

@@ -1,9 +1,9 @@
 'use client';
 
 import React, { lazy, memo, Suspense, useCallback, useMemo, useState } from "react";
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/shared/ui/dialog";
+import { Button } from "@/shared/ui/button";
+import { Skeleton } from "@/shared/ui/skeleton";
 import { invoke } from "@tauri-apps/api/core";
 // Импорт функции удаления из плагина FS Tauri v2
 import { remove, exists } from "@tauri-apps/plugin-fs"; 

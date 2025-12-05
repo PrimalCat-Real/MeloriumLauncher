@@ -1,9 +1,9 @@
 'use client';
 
 import React, { memo, Suspense, useCallback, useMemo, useState } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogContent } from '@/shared/ui/dialog';
+import { Button } from '@/shared/ui/button';
+import { Skeleton } from '@/shared/ui/skeleton';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '@/store/configureStore';
 import { changeDownloadStatus, setVersions } from '@/store/slice/downloadSlice';
@@ -12,7 +12,7 @@ import { useManifest } from '@/hooks/useManifest';
 import { useFileSync } from '@/hooks/useFileSync';
 import { toast } from 'sonner';
 import { LoaderCircle } from 'lucide-react';
-import { Progress } from '../ui/progress';
+import { Progress } from '../../shared/ui/progress';
 import { invoke } from '@tauri-apps/api/core';
 import * as Sentry from "@sentry/browser";
 

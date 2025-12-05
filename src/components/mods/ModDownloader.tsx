@@ -3,7 +3,7 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { Button } from '../ui/button';
+import { Button } from '../../shared/ui/button';
 import { Download, LoaderCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { RootState } from '@/store/configureStore';

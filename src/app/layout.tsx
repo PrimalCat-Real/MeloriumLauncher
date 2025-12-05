@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import Image from "next/image";
 import bg from '@/assets/images/background.png'
 import PersistProvider from "@/components/provider/persist-provider";
-import { Toaster } from "@/components/ui/sonner";
+import { Toaster } from "@/shared/ui/sonner";
 import Header from "@/components/header/Header";
 import QueryProvider from "@/components/provider/query-provider";
 import Footer from "@/components/header/Footer";

@@ -3,9 +3,9 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import { useDispatch, useSelector, shallowEqual } from 'react-redux';
-import { Button } from '../ui/button';
+import { Button } from '../../shared/ui/button';
 import { CloudDownload, LoaderCircle } from 'lucide-react';
-import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../shared/ui/tooltip';
 import { toast } from 'sonner';
 import { RootState } from '@/store/configureStore';
 import { Mod, removeFromMissingMods, setModEnabled } from '@/store/slice/modsSlice';

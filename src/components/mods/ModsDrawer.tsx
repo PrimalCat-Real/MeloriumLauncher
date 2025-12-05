@@ -1,6 +1,6 @@
 'use client'
 import React, { ReactNode, Suspense, useEffect, useState, useTransition } from 'react'
-import { Button } from '../ui/button'
+import { Button } from '../../shared/ui/button'
 import { motion, AnimatePresence } from 'framer-motion'
 import Image from 'next/image'
 import bg from '@/assets/images/background.png'

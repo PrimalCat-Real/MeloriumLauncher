@@ -1,6 +1,6 @@
 'use client'
 import React, { memo, useEffect, useState } from 'react'
-import { Switch } from '../ui/switch'
+import { Switch } from '../../shared/ui/switch'
 import type { Mod } from '@/store/slice/modsSlice';
 
 interface ModToggleProps {

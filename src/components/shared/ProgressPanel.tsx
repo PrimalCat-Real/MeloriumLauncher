@@ -2,9 +2,9 @@
 'use client';
 
 import React, { memo, useCallback, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/shared/ui/button";
+import { Progress } from "@/shared/ui/progress";
+import { Skeleton } from "@/shared/ui/skeleton";
 import { FolderSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 

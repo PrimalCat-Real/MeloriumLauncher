@@ -1,12 +1,12 @@
 'use client'
 import { invoke } from '@tauri-apps/api/core'
 import React, { useEffect, useState } from 'react'
-import { Slider } from '../ui/slider'
+import { Slider } from '../../shared/ui/slider'
 import { cn } from '@/lib/utils'
 import { useDispatch, useSelector } from 'react-redux'
 import { RootState } from '@/store/configureStore'
 import { setJavaMemory } from '@/store/slice/settingsSlice'
-import { Input } from '../ui/input'
+import { Input } from '../../shared/ui/input'
 
 const RamSelector = () => {
     const dispatch = useDispatch()

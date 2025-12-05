@@ -4,7 +4,7 @@ import { MinecraftLaunchParams, useMinecraftLaunch } from '@/hooks/useMinecraftL
 import { RootState } from '@/store/configureStore';
 import React, { useCallback, useMemo, useState } from 'react'
 import { useSelector } from 'react-redux';
-import { Button } from '../ui/button';
+import { Button } from '../../shared/ui/button';
 import { toast } from 'sonner';
 import { LoaderCircle } from 'lucide-react';
 import { getPublicIp, whitelistIp } from '@/lib/utils';
