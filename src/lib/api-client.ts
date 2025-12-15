@@ -19,27 +19,22 @@ export const apiClient = axios.create({
   },
 });
 
-// === 1. REQUEST INTERCEPTOR ===
 apiClient.interceptors.request.use(
   (config) => {
     const state = store.getState();
     const { authSlice, settingsState } = state;
 
-    // A. Динамический эндпоинт
     const activeEndpoint = settingsState.activeEndPoint;
     if (activeEndpoint) {
       config.baseURL = activeEndpoint;
     }
 
-    // B. Токен (ТОЛЬКО ИЗ REDUX)
-    // redux-persist сам достанет его при гидратации, нам не нужно лезть в localStorage
     const token = authSlice.authToken;
     
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    // C. Умный таймаут
     if (!config.signal) {
         const controller = new AbortController();
         config.signal = controller.signal;

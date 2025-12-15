@@ -1,0 +1,103 @@
+import { useCallback } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { useSelector, useDispatch } from 'react-redux';
+import { RootState } from '@/store/configureStore';
+import { SERVER_ENDPOINTS } from '@/lib/config';
+import { toast } from 'sonner';
+
+// Типы стратегий загрузки, соответствующие твоим Rust командам
+export type DownloadStrategy = 
+  | 'fallback'  // downloadfilewithfallbacks (Самая надежная)
+  | 'heavy'     // downloadfileheavy
+  | 'direct'    // downloadfiledirect
+  | 'mod';      // downloadmodfile
+
+interface DownloadOptions {
+  strategy?: DownloadStrategy;
+  taskId?: string; // Для трекинга прогресса
+  // Для стратегии 'mod'
+  modName?: string; 
+  username?: string;
+  password?: string;
+}
+
+export const useDownload = () => {
+  const { authToken, userLogin, userPassword } = useSelector((state: RootState) => state.authSlice);
+  const dispatch = useDispatch();
+
+  const downloadFile = useCallback(async (
+    relativeUrl: string,
+    destinationPath: string,
+    options: DownloadOptions = {}
+  ) => {
+    const { strategy = 'fallback', taskId = 'unknown', modName } = options;
+    
+    const endpoints = [SERVER_ENDPOINTS.main, SERVER_ENDPOINTS.proxy];
+    
+    let lastError: any = null;
+
+    for (const endpoint of endpoints) {
+      try {
+        const cleanEndpoint = endpoint.replace(/\/$/, '');
+        const cleanRelative = relativeUrl.replace(/^\//, '');
+        const fullUrl = `${cleanEndpoint}/${cleanRelative}`;
+
+        console.log(`🔽 Downloading [${strategy}] from ${endpoint}: ${cleanRelative}`);
+
+        switch (strategy) {
+          case 'fallback':
+            await invoke('downloadfilewithfallbacks', {
+              window: null,
+              url: fullUrl,
+              path: destinationPath,
+              authtoken: authToken,
+              taskid: taskId
+            });
+            break;
+
+          case 'heavy':
+            await invoke('downloadfileheavy', {
+              url: fullUrl,
+              path: destinationPath,
+              authtoken: authToken,
+              taskid: taskId
+            });
+            break;
+
+          case 'direct':
+             await invoke('downloadfiledirect', {
+               url: fullUrl,
+               path: destinationPath,
+               authtoken: authToken
+             });
+             break;
+
+          case 'mod':
+            await invoke('downloadmodfile', {
+               url: fullUrl,
+               path: destinationPath,
+               modName: modName || cleanRelative.split('/').pop(),
+               username: userLogin,
+               password: userPassword
+            });
+            break;
+        }
+
+        console.log(`✅ Download success: ${cleanRelative}`);
+        return;
+
+      } catch (error) {
+        console.warn(`⚠️ Download failed on ${endpoint}:`, error);
+        lastError = error;
+      }
+    }
+
+    const errorMsg = `All download attempts failed for ${relativeUrl}`;
+    console.error(errorMsg, lastError);
+    toast.error('Download failed', { description: `Could not download ${relativeUrl}` });
+    throw new Error(errorMsg);
+
+  }, [authToken, userLogin, userPassword]);
+
+  return { downloadFile };
+};
