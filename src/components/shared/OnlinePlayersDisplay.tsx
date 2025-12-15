@@ -7,6 +7,7 @@ import { Skeleton } from '../ui/skeleton'
 import { UsersRound } from 'lucide-react'
 import { AnimatedShinyText } from '../magicui/animated-shiny-text'
 import * as Sentry from "@sentry/browser";
+import { apiClient } from '@/lib/api-client'
 
 type StatusPayload = {
   status: 'online' | 'offline'
@@ -28,8 +29,8 @@ const buildUrl = (endpoint: string): string => {
 const fetchStatus = async (endpoint: string): Promise<StatusPayload> => {
   try {
     const url = buildUrl(endpoint)
-    const { data } = await axios.get<StatusPayload>(url, { timeout: 5000 })
-    
+    const { data } = await apiClient.get<StatusPayload>(url, { timeout: 0 })
+
     if (!data || typeof data.status !== 'string' || !data.players) {
       return OFFLINE_FALLBACK
     }
@@ -39,7 +40,7 @@ const fetchStatus = async (endpoint: string): Promise<StatusPayload> => {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       throw error; // Interceptor обработает
     }
-    
+
     return OFFLINE_FALLBACK
   }
 }

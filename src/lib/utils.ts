@@ -105,6 +105,7 @@ import axios from "axios";
 import { BaseDirectory, exists, readTextFile, remove } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
 import { LocalMeloriamConfig, VersionResponse } from "@/types/utils";
+import { apiClient } from "./api-client";
 
 async function checkAndUpdate(toaster: typeof toast) {
   try {
@@ -241,9 +242,10 @@ export const getLocalVersion = async (baseDir: string): Promise<string | null> =
 
 export const getServerVersion = async (versionUrl: string, authToken?: string | null): Promise<VersionResponse | null> => {
     try {
-        const { data } = await axios.get<VersionResponse>(versionUrl, {
-            headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
-        });
+        // const { data } = await axios.get<VersionResponse>(versionUrl, {
+        //     headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
+        // });
+        const {data} = await apiClient.get<VersionResponse>(versionUrl);
         
         console.log('Server version:', data.version);
         return data;

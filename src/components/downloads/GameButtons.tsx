@@ -14,6 +14,7 @@ import { getLocalVersion, getPlayerSystemInfo, getServerVersion } from '@/lib/ut
 import { exists } from '@tauri-apps/plugin-fs'
 import axios from 'axios'
 import * as Sentry from "@sentry/browser";
+import { apiClient } from '@/lib/api-client'
 
 interface ModsConfigResponse {
     version: string
@@ -29,7 +30,7 @@ const GameButtons = () => {
     const localVersion = useSelector((state: RootState) => state.downloadSlice.localVersion)
     const serverVersion = useSelector((state: RootState) => state.downloadSlice.serverVersion)
     const activeEndPoint = useSelector((s: RootState) => s.settingsState.activeEndPoint)
-    
+
     const dispatch = useDispatch()
 
     const configUrl = useMemo(() => {
@@ -48,22 +49,20 @@ const GameButtons = () => {
 
     const loadModsData = async () => {
         try {
-            const { data } = await axios.get<ModsConfigResponse>(configUrl, {
-                headers: authToken ? { Authorization: `Bearer ${authToken}` } : {}
-            })
-            
+            const { data } = await apiClient.get<ModsConfigResponse>(configUrl)
+
             console.log('[modsData] Loaded config:', {
                 version: data.version,
                 mods: data.mods.length,
                 presets: data.presets.length,
                 ignoredPaths: data.ignoredPaths?.length || 0
             })
-            
-            dispatch(setModsData({ 
-                mods: data.mods, 
+
+            dispatch(setModsData({
+                mods: data.mods,
                 presets: data.presets
             }))
-            
+
             if (data.ignoredPaths && data.ignoredPaths.length > 0) {
                 console.log('[modsData] Setting ignored paths:', data.ignoredPaths)
                 dispatch(setIgnoredPaths(data.ignoredPaths))
@@ -124,15 +123,15 @@ const GameButtons = () => {
 
     const checkVersion = async () => {
         const baseDirExists = await checkBaseDirectoryPresence()
-       
+
         if (!baseDirExists) {
             dispatch(resetMods())
             dispatch(changeDownloadStatus('needFisrtInstall'))
             return
         }
-        
+
         const versions = await fetchVersions()
-        
+
         // Проверяем, нужно ли обновление
         if (versions.local && versions.server && versions.local !== versions.server) {
             console.log('[checkVersion] Update needed:', {
@@ -147,8 +146,8 @@ const GameButtons = () => {
 
     const needsUpdate = useMemo(() => {
         if (status === 'needFisrtInstall') return false;
-        return status === 'needUpdate' || 
-               (localVersion && serverVersion && localVersion !== serverVersion)
+        return status === 'needUpdate' ||
+            (localVersion && serverVersion && localVersion !== serverVersion)
     }, [status, localVersion, serverVersion])
 
     useEffect(() => {
@@ -156,7 +155,7 @@ const GameButtons = () => {
             await loadModsData()
             await checkVersion()
         }
-        
+
         initialize()
         // return status if not work
     }, [baseDir])
@@ -177,10 +176,10 @@ const GameButtons = () => {
         const versionCheckInterval = setInterval(async () => {
             console.log('[versionCheck] Running periodic check...')
             const baseDirExists = await checkBaseDirectoryPresence()
-            
+
             if (baseDirExists) {
                 const versions = await fetchVersions()
-                
+
                 // Проверяем, нужно ли обновление
                 if (versions.local && versions.server && versions.local !== versions.server) {
                     console.log('[versionCheck] Update available:', {
@@ -188,7 +187,7 @@ const GameButtons = () => {
                         server: versions.server
                     })
                     dispatch(changeDownloadStatus('needUpdate'))
-                    
+
                     // Показываем уведомление только один раз
                     if (status !== 'needUpdate') {
                         toast.info('Доступно обновление', {

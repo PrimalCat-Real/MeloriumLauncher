@@ -19,14 +19,14 @@ export default function Home() {
   return (
     <main className="flex flex-col w-full justify-start items-center h-full relative">
       <Image className="w-2/3" src={title} alt={"title melorium"}></Image>
-      <LoginRedirect></LoginRedirect>
+      {/* <LoginRedirect></LoginRedirect> */}
       <div className="flex flex-col gap-6 items-center">
         <OnlinePlayersDisplay></OnlinePlayersDisplay>
         <GameButtons></GameButtons>
         <VersionInfoCard></VersionInfoCard>
       </div>
       <ActiveEndpointSelector></ActiveEndpointSelector>
-        {/* <Download></Download>
+      {/* <Download></Download>
         <LaunchGame></LaunchGame> */}
     </main>
   );

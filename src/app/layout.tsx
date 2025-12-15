@@ -9,6 +9,7 @@ import { Toaster } from "@/components/ui/sonner";
 import Header from "@/components/header/Header";
 import QueryProvider from "@/components/provider/query-provider";
 import Footer from "@/components/header/Footer";
+import AuthGuardProvider from "@/components/provider/AuthGuardProvider";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -31,14 +32,16 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={cn(geistSans.variable, geistMono.variable,"antialiased w-full h-screen selection:bg-muted/20 selection:text-input bg-gradient-to-br from-background to-background-secondary text-foreground overflow-hidden")}
+        className={cn(geistSans.variable, geistMono.variable, "antialiased w-full h-screen selection:bg-muted/20 selection:text-input bg-gradient-to-br from-background to-background-secondary text-foreground overflow-hidden")}
       >
         <PersistProvider>
           <QueryProvider>
-            <Header></Header>
-            <Image className="fixed top-0 left-0 w-full h-full" src={bg} alt="bg" width={988} height={629}  />
-            {children}
-            <Footer></Footer>
+            <AuthGuardProvider>
+              <Header></Header>
+              <Image className="fixed top-0 left-0 w-full h-full" src={bg} alt="bg" width={988} height={629} />
+              {children}
+              <Footer></Footer>
+            </AuthGuardProvider>
           </QueryProvider>
         </PersistProvider>
         <Toaster richColors></Toaster>

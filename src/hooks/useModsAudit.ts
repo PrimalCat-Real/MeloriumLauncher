@@ -6,6 +6,7 @@ import axios from 'axios';
 import { invoke } from '@tauri-apps/api/core';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store/configureStore';
+import { apiClient } from '@/lib/api-client';
 
 type LocalFile = { path: string; size: number; mtime_ms: number; sha256: string };
 type ManifestFile = { path: string; size: number; mtimeMs: number; sha256: string };
@@ -134,9 +135,9 @@ export const useModsAudit = () => {
       let manifest: ModsManifest;
       const tStartFetch = performance.now();
       try {
-        const { data } = await axios.get<ModsManifest>(`${baseUrl}/mods-manifest`, {
+        const { data } = await apiClient.get<ModsManifest>(`${baseUrl}/mods-manifest`, {
           withCredentials: true,
-          timeout: 15000,
+          // timeout: 15000,
         });
         manifest = data;
       } catch (errorCaught) {

@@ -5,7 +5,7 @@ import { setupAxiosInterceptors } from '@/lib/axiosConfig';
 
 export function AxiosProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    setupAxiosInterceptors();
+    // setupAxiosInterceptors();
   }, []);
 
   return <>{children}</>;

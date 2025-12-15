@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import axios from 'axios';
 import { SERVER_ENDPOINTS } from '@/lib/config';
+import { apiClient } from '@/lib/api-client';
 
 interface FileEntry {
   path: string;
@@ -70,12 +71,12 @@ export function useManifest() {
         // Запускаем таймер смерти перед запросом
         refreshTimeout();
 
-        const response = await axios.get<LauncherManifest>(
+        const response = await apiClient.get<LauncherManifest>(
           `${currentBaseUrl}/launcher/manifest`,
           {
             headers,
-            signal: abortController.signal, // Подключаем наш контроллер
-            timeout: 0, // ОТКЛЮЧАЕМ встроенный таймаут axios (0 = бесконечно)
+            signal: abortController.signal,
+            timeout: 0, 
             adapter: 'fetch',
             validateStatus: (status) => status >= 200 && status < 300,
             
