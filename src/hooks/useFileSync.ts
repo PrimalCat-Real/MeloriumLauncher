@@ -1,15 +1,9 @@
 import { useState, useCallback } from 'react';
 import { join } from '@tauri-apps/api/path';
-import { invoke } from '@tauri-apps/api/core';
-import { exists, rename, remove, writeFile } from '@tauri-apps/plugin-fs';
+import { remove, exists, rename } from '@tauri-apps/plugin-fs';
 import { matchesIgnoredPath } from '@/lib/glob-utils';
 import * as Sentry from "@sentry/browser";
-import { listen } from '@tauri-apps/api/event';
-import { silentRelogin } from '@/lib/auth';
-import { RootState } from '@/store/configureStore';
-import { useSelector, useDispatch } from 'react-redux';
-import { SERVER_ENDPOINTS } from '@/lib/config';
-import { setUserData } from '@/store/slice/authSlice';
+import { useDownload } from '@/hooks/useDownload';
 
 interface FileEntry {
   path: string;
@@ -36,117 +30,12 @@ interface SyncResult {
   skipped: string[];
 }
 
-const useDownload = () => {
-  const { authToken } = useSelector((state: RootState) => state.authSlice);
-  const activeEndPoint = useSelector((state: RootState) => state.settingsState.activeEndPoint);
-  const dispatch = useDispatch();
-
-  const downloadFileFallbackJs = async (url: string, path: string, token?: string) => {
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers,
-    });
-
-    if (!response.ok) throw new Error(`JS Download HTTP ${response.status}`);
-
-    const buffer = await response.arrayBuffer();
-    const uint8Array = new Uint8Array(buffer);
-    await writeFile(path, uint8Array);
-  };
-
-  const downloadFileWithRetries = useCallback(async (
-    file: FileEntry,
-    gameDir: string
-  ) => {
-    const localPath = await join(gameDir, file.path);
-    const taskId = crypto.randomUUID();
-    
-    const endpoints = activeEndPoint === SERVER_ENDPOINTS.main 
-        ? [SERVER_ENDPOINTS.main, SERVER_ENDPOINTS.proxy] 
-        : [SERVER_ENDPOINTS.proxy, SERVER_ENDPOINTS.main];
-
-    const maxRetriesPerEndpoint = 2;
-    
-    // Локальная переменная для токена, чтобы обновить её при релогине без ре-рендера
-    let currentToken = authToken;
-
-    const unlistenPromise = listen(`download-progress-${taskId}`, () => {});
-
-    for (const endpoint of endpoints) {
-        const baseUrl = endpoint.replace(/\/$/, '');
-        const fullUrl = `${baseUrl}${file.url}`;
-        
-        let attempts = 0;
-        
-        while (attempts < maxRetriesPerEndpoint) {
-            attempts++;
-
-            try {
-                const strategy = attempts === 1 ? 'direct' : 'fallback';
-                
-                if (strategy === 'direct') {
-                    await invoke("download_file_direct", {
-                        url: fullUrl,
-                        path: localPath,
-                        authToken: currentToken || null,
-                    });
-                } else {
-                    await invoke("download_file_with_fallbacks", {
-                        url: fullUrl,
-                        path: localPath,
-                        authToken: currentToken || null,
-                        taskId: taskId
-                    });
-                }
-
-                (await unlistenPromise)();
-                return;
-
-            } catch (error: any) {
-                const msg = String(error?.message || error);
-                
-                if (msg.includes("401") || msg.includes("UNAUTHORIZED")) {
-                    console.warn(`[download] 401 Token expired. Relogin...`);
-                    try {
-                        const newToken = await silentRelogin(baseUrl); 
-                        if (newToken) {
-                            currentToken = newToken;
-                            dispatch(setUserData({ authToken: newToken }));
-                            attempts--; 
-                            continue;
-                        }
-                    } catch (e) {
-                         console.error("Relogin failed during download", e);
-                    }
-                }
-
-                console.warn(`[download] Failed ${file.path} on ${endpoint}: ${msg}`);
-                
-                if (endpoint === endpoints[endpoints.length - 1] && attempts === maxRetriesPerEndpoint) {
-                     Sentry.captureException(error);
-                     throw new Error(`All mirrors failed for ${file.path}. Last error: ${msg}`);
-                }
-
-                await new Promise(r => setTimeout(r, 1000));
-            }
-        }
-    }
-    
-    (await unlistenPromise)();
-  }, [authToken, activeEndPoint, dispatch]);
-
-  return { downloadFileWithRetries };
-};
-
 export function useFileSync() {
   const [isComparing, setIsComparing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0, percent: 0 });
   
-  const { downloadFileWithRetries } = useDownload(); 
+  const { downloadFile } = useDownload(); 
 
   const isInMeloriamFolder = useCallback((path: string): boolean => {
     return path.startsWith('Melorium/');
@@ -320,13 +209,22 @@ export function useFileSync() {
       }
 
       for (const file of syncResult.toDownload) {
-        await downloadFileWithRetries(file, gameDir);
+        const localPath = await join(gameDir, file.path);
+        await downloadFile(file.url, localPath, { 
+            strategy: 'fallback', 
+            taskId: crypto.randomUUID() 
+        });
         updateProgress();
       }
 
       for (const file of syncResult.toUpdate) {
         await deleteFile(file.path, gameDir);
-        await downloadFileWithRetries(file, gameDir);
+        
+        const localPath = await join(gameDir, file.path);
+        await downloadFile(file.url, localPath, { 
+            strategy: 'fallback', 
+            taskId: crypto.randomUUID() 
+        });
         updateProgress();
       }
 
@@ -342,7 +240,7 @@ export function useFileSync() {
       setIsSyncing(false);
       setProgress({ current: 0, total: 0, percent: 0 });
     }
-  }, [downloadFileWithRetries, deleteFile, disableMod]);
+  }, [downloadFile, deleteFile, disableMod]);
 
   return {
     compareFiles,

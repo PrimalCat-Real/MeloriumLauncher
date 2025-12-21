@@ -46,40 +46,40 @@ export const useDownload = () => {
 
         switch (strategy) {
           case 'fallback':
-            await invoke('downloadfilewithfallbacks', {
-              window: null,
+            await invoke('download_file_with_fallbacks', {
+              // УДАЛИЛ: window: null
               url: fullUrl,
               path: destinationPath,
-              authtoken: authToken,
-              taskid: taskId
+              authToken: authToken, // camelCase
+              taskId: taskId        // camelCase (Tauri сам сделает task_id для Rust)
             });
             break;
 
           case 'heavy':
-            await invoke('downloadfileheavy', {
+            await invoke('download_file_heavy', {
               url: fullUrl,
               path: destinationPath,
-              authtoken: authToken,
-              taskid: taskId
+              authToken: authToken, // camelCase
+              taskId: taskId        // camelCase
             });
             break;
 
           case 'direct':
-             await invoke('downloadfiledirect', {
+             await invoke('download_file_direct', {
                url: fullUrl,
                path: destinationPath,
-               authtoken: authToken
+               authToken: authToken // camelCase
              });
              break;
 
           case 'mod':
-            await invoke('downloadmodfile', {
+            await invoke('download_mod_file', { 
                url: fullUrl,
                path: destinationPath,
-               modName: modName || cleanRelative.split('/').pop(),
+               modName: modName || cleanRelative.split('/').pop(), // camelCase -> mod_name
                username: userLogin,
                password: userPassword
-            });
+             });
             break;
         }
 

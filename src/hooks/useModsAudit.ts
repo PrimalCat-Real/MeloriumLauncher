@@ -1,4 +1,3 @@
-// app/hooks/useModsAudit.ts
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
@@ -7,6 +6,8 @@ import { invoke } from '@tauri-apps/api/core';
 import { useSelector } from 'react-redux';
 import { RootState } from '@/store/configureStore';
 import { apiClient } from '@/lib/api-client';
+import { useDownload } from '@/hooks/useDownload';
+import { SERVER_ENDPOINTS } from '@/lib/config';
 
 type LocalFile = { path: string; size: number; mtime_ms: number; sha256: string };
 type ManifestFile = { path: string; size: number; mtimeMs: number; sha256: string };
@@ -69,8 +70,9 @@ export const useModsAudit = () => {
 
   const activeEndPoint = useSelector((state: RootState) => state.settingsState.activeEndPoint);
   const { userLogin, userPassword } = useSelector((state: RootState) => state.authSlice);
+  const { downloadFile } = useDownload();
 
-  const lastModsDirRef = useRef<string>(''); // stores modsDir from last runAudit
+  const lastModsDirRef = useRef<string>(''); 
 
   const runAudit = useCallback(
     async (modsDir: string): Promise<AuditResult> => {
@@ -86,7 +88,6 @@ export const useModsAudit = () => {
         return { toDelete: [], toDownload: [], mismatched: [], totalDownloadBytes: 0, totalDownloadCount: 0 };
       }
 
-      // 1) Хеширование локальных модов
       let localFiles: LocalFile[] = [];
       const tStartHash = performance.now();
       try {
@@ -104,7 +105,6 @@ export const useModsAudit = () => {
         console.log('[mods-audit] hash time ms:', Math.max(0, Math.round(performance.now() - tStartHash)));
       }
 
-      // ЛОГ: локальные файлы
       const localEnabled = localFiles.filter(f => isJar(f.path));
       const localDisabled = localFiles.filter(f => isJarDisabled(f.path));
       console.log('[mods-audit] local mods overview:', {
@@ -130,15 +130,11 @@ export const useModsAudit = () => {
         })),
       });
 
-      // 2) Получаем манифест
       setStatus('fetching');
       let manifest: ModsManifest;
       const tStartFetch = performance.now();
       try {
-        const { data } = await apiClient.get<ModsManifest>(`${baseUrl}/mods-manifest`, {
-          withCredentials: true,
-          // timeout: 15000,
-        });
+        const { data } = await apiClient.get<ModsManifest>(`/mods-manifest`);
         manifest = data;
       } catch (errorCaught) {
         setStatus('error');
@@ -148,7 +144,6 @@ export const useModsAudit = () => {
         console.log('[mods-audit] manifest fetch time ms:', Math.max(0, Math.round(performance.now() - tStartFetch)));
       }
 
-      // ЛОГ: серверный манифест
       console.log('[mods-audit] server manifest:', {
         generatedAt: manifest.generatedAt,
         dirHash: manifest.dirHash,
@@ -172,7 +167,6 @@ export const useModsAudit = () => {
         })),
       });
 
-      // 3) Дифф
       setStatus('diffing');
       const tStartDiff = performance.now();
 
@@ -194,7 +188,6 @@ export const useModsAudit = () => {
       }));
       const allServerEntries: ServerEntry[] = [...requiredEntries, ...optionalEntries];
 
-      // ЛОГ: исходный список серверных записей
       console.log('[mods-audit] server entries (pre-bestByStem):', {
         total: allServerEntries.length,
         items: allServerEntries.map(e => ({
@@ -224,7 +217,6 @@ export const useModsAudit = () => {
         }
       }
 
-      // ЛОГ: лучший выбор по stem
       console.log('[mods-audit] bestByStem:', Array.from(bestByStem.entries()).map(([stem, entry]) => ({
         stem,
         kind: entry.kind,
@@ -260,7 +252,6 @@ export const useModsAudit = () => {
         }
       }
 
-      // ЛОГ: индексы локальных и серверных
       console.log('[mods-audit] indices overview:', {
         requiredBases: Array.from(requiredBases),
         optionalBases: Array.from(optionalBases),
@@ -332,7 +323,6 @@ export const useModsAudit = () => {
 
       const deduplicatedDelete = Array.from(new Set(nextToDelete));
 
-      // ЛОГ: финальные списки
       console.log('[mods-audit] results:', {
         toDelete: deduplicatedDelete,
         toDownload: nextToDownload,
@@ -365,53 +355,63 @@ export const useModsAudit = () => {
 
   const resolveAndDownload = useCallback(
     async (modsDir: string, filePaths: string[]): Promise<ResolveResult> => {
-      const baseUrl = buildBaseUrl(activeEndPoint);
-      if (!baseUrl || !userLogin || !userPassword || filePaths.length === 0) {
+      
+      if (!userLogin || !userPassword || filePaths.length === 0) {
         return { downloaded: [], missingOnServer: [] };
       }
-      try {
-        setStatus('fetching');
-        const { data } = await axios.post<ResolveResponse>(
-          `${baseUrl}/download/resolve-mods`,
-          { files: filePaths, username: userLogin, password: userPassword },
-          { withCredentials: true, timeout: 20000 }
-        );
 
-        const overwriteTargets = Array.from(new Set((data.available ?? []).map((item) => item.path)));
-        if (overwriteTargets.length > 0) {
-          try {
-            await invoke('delete_extra_files', { baseDir: modsDir, relativePaths: overwriteTargets });
-          } catch (errorCaught) {
-            console.log('[mods-download] pre-delete failed, continue:', errorCaught);
-          }
-        }
+      const endpoints = activeEndPoint === SERVER_ENDPOINTS.main 
+        ? [SERVER_ENDPOINTS.main, SERVER_ENDPOINTS.proxy] 
+        : [SERVER_ENDPOINTS.proxy, SERVER_ENDPOINTS.main];
 
-        setStatus('downloading');
-        const downloadedFiles: string[] = [];
-        for (const item of data.available ?? []) {
-          try {
-            await invoke('download_mod_file', {
-              url: `${baseUrl}${item.url}`,
-              path: modsDir,
-              modName: item.path,
-              username: userLogin,
-              password: userPassword,
-            });
-            downloadedFiles.push(item.path);
-          } catch (errorCaught) {
-            console.log('[mods-download] failed:', item.path, errorCaught);
-          }
-        }
+      let lastError: any = null;
 
-        setStatus('ready');
-        return { downloaded: downloadedFiles, missingOnServer: Array.isArray(data.missing) ? data.missing : [] };
-      } catch (errorCaught) {
-        setStatus('error');
-        setError(errorCaught instanceof Error ? errorCaught.message : String(errorCaught));
-        return { downloaded: [], missingOnServer: [] };
+      for (const endpoint of endpoints) {
+         try {
+           const baseUrl = buildBaseUrl(endpoint);
+           setStatus('fetching');
+           
+           const { data } = await axios.post<ResolveResponse>(
+             `${baseUrl}/download/resolve-mods`,
+             { files: filePaths, username: userLogin, password: userPassword },
+             { withCredentials: true, timeout: 20000 }
+           );
+ 
+           const overwriteTargets = Array.from(new Set((data.available ?? []).map((item) => item.path)));
+           if (overwriteTargets.length > 0) {
+             try {
+               await invoke('delete_extra_files', { baseDir: modsDir, relativePaths: overwriteTargets });
+             } catch (errorCaught) {
+               console.log('[mods-download] pre-delete failed, continue:', errorCaught);
+             }
+           }
+ 
+           setStatus('downloading');
+           const downloadedFiles: string[] = [];
+ 
+           for (const item of data.available ?? []) {
+             // Использование нового хука
+             await downloadFile(item.url, modsDir, { 
+                strategy: 'mod', 
+                modName: item.path 
+             });
+             downloadedFiles.push(item.path);
+           }
+ 
+           setStatus('ready');
+           return { downloaded: downloadedFiles, missingOnServer: Array.isArray(data.missing) ? data.missing : [] };
+         } catch (errorCaught) {
+           console.warn(`[mods-download] Failed on ${endpoint}:`, errorCaught);
+           lastError = errorCaught;
+         }
       }
+
+      setStatus('error');
+      const msg = lastError instanceof Error ? lastError.message : String(lastError);
+      setError(`All mirrors failed. Last error: ${msg}`);
+      return { downloaded: [], missingOnServer: [] };
     },
-    [activeEndPoint, userLogin, userPassword]
+    [activeEndPoint, userLogin, userPassword, downloadFile]
   );
 
   const downloadPlanned = useCallback(
@@ -426,7 +426,6 @@ export const useModsAudit = () => {
     [toDownload, mismatched, resolveAndDownload]
   );
 
-  // Backward-compatible API for existing callers (e.g., BulkModDownloader)
   const downloadSelected = useCallback(
     async (files: string[]): Promise<ResolveResult> => {
       const modsDir = lastModsDirRef.current;
