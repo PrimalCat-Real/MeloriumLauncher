@@ -7,7 +7,6 @@ import { Button } from '../ui/button';
 import { CloudDownload, LoaderCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip';
 import { toast } from 'sonner';
-import { RootState } from '@/store/configureStore';
 import { Mod, removeFromMissingMods, setModEnabled } from '@/store/slice/modsSlice';
 import { useModsAudit } from '@/hooks/useModsAudit';
 

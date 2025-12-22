@@ -1,9 +1,9 @@
 // src/lib/apiClient.ts
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
-import { store } from '@/store/configureStore';
-import { setUserData, clearAuthData } from '@/store/slice/authSlice';
-import { setActiveEndPoint } from '@/store/slice/settingsSlice';
 import { SERVER_ENDPOINTS } from '@/lib/config'; 
+import { useAuthStore } from '@/store/useAuthStore';
+import { useSettingsStore } from '@/store/useSettingsStore';
+import { LOGGER } from './loger';
 
 interface CustomAxiosRequestConfig extends InternalAxiosRequestConfig {
   _isRetry?: boolean;
@@ -21,15 +21,15 @@ export const apiClient = axios.create({
 
 apiClient.interceptors.request.use(
   (config) => {
-    const state = store.getState();
-    const { authSlice, settingsState } = state;
-
-    const activeEndpoint = settingsState.activeEndPoint;
-    if (activeEndpoint) {
-      config.baseURL = activeEndpoint;
+    
+    const authToken = useAuthStore.getState().authToken
+    const activeEndPoint = useSettingsStore.getState().activeEndPoint
+    
+    if (activeEndPoint) {
+      config.baseURL = activeEndPoint;
     }
 
-    const token = authSlice.authToken;
+    const token = authToken;
     
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -59,43 +59,45 @@ apiClient.interceptors.request.use(
   },
   (error) => Promise.reject(error)
 );
-
 apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as CustomAxiosRequestConfig;
 
+    // switch endpoint
     if (!error.response && originalRequest && !originalRequest._retryCount) {
-        console.warn('ApiClient: Network Error. Trying to switch endpoint...');
-        originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
-        
-        const currentEndpoint = store.getState().settingsState.activeEndPoint;
-        const nextEndpoint = currentEndpoint === SERVER_ENDPOINTS.main 
-            ? SERVER_ENDPOINTS.proxy 
-            : SERVER_ENDPOINTS.main;
-        
-        store.dispatch(setActiveEndPoint({ activeEndPoint: nextEndpoint }));
-        
-        originalRequest.baseURL = nextEndpoint;
-        return apiClient(originalRequest);
+      console.warn('ApiClient: Network Error. Trying to switch endpoint...');
+      originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
+      
+      const currentEndpoint = useSettingsStore.getState().activeEndPoint;
+      const nextEndpoint = currentEndpoint === SERVER_ENDPOINTS.main 
+        ? SERVER_ENDPOINTS.proxy 
+        : SERVER_ENDPOINTS.main;
+      
+      useSettingsStore.getState().setActiveEndpoint(nextEndpoint);
+      originalRequest.baseURL = nextEndpoint;
+      return apiClient(originalRequest);
     }
 
+    // silent relogin
     if (error.response?.status === 401 && originalRequest && !originalRequest._isRetry) {
       originalRequest._isRetry = true;
 
       if ((originalRequest._retryCount || 0) > 2) {
-          store.dispatch(clearAuthData());
-          return Promise.reject(error);
+        return Promise.reject(error);
       }
 
       console.log('ApiClient: 401 Detected. Silent Re-login...');
 
       try {
-        const state = store.getState();
-        const { userLogin, userPassword } = state.authSlice;
-        const activeEndpoint = state.settingsState.activeEndPoint;
+        const authState = useAuthStore.getState();
+        const settingsState = useSettingsStore.getState();
+        const { username: userLogin, password: userPassword } = authState;
+        const activeEndpoint = settingsState.activeEndPoint;
 
-        if (!userLogin || !userPassword) throw new Error('No credentials');
+        if (!userLogin || !userPassword) {
+          return Promise.reject(new Error('No credentials'));
+        }
 
         const { data } = await axios.post(`${activeEndpoint}/auth/signin`, {
           username: userLogin,
@@ -103,26 +105,20 @@ apiClient.interceptors.response.use(
         });
 
         if (data.token) {
-            console.log('ApiClient: Re-login success');
-            
-            store.dispatch(setUserData({ 
-                authToken: data.token, 
-                authStatus: true, 
-                userLogin, 
-                userPassword 
-            }));
+          console.log('ApiClient: Re-login success');
+          
+          useAuthStore.getState().setAuthCredits(userLogin, userPassword, data.token);
+          useAuthStore.getState().setAuthStatus('authenticated')
 
-            if (originalRequest.headers) {
-                originalRequest.headers.Authorization = `Bearer ${data.token}`;
-            }
-            
-            originalRequest.baseURL = store.getState().settingsState.activeEndPoint;
-            
-            return apiClient(originalRequest);
+          if (originalRequest.headers) {
+            originalRequest.headers.Authorization = `Bearer ${data.token}`;
+          }
+          
+          originalRequest.baseURL = useSettingsStore.getState().activeEndPoint;
+          return apiClient(originalRequest);
         }
       } catch (refreshError) {
-        console.error('ApiClient: Re-login failed', refreshError);
-        store.dispatch(clearAuthData());
+        LOGGER.error('Api-login failed', refreshError);
       }
     }
 

@@ -1,11 +1,9 @@
 
 import Image from "next/image";
 import title from '@/assets/images/title.png'
-import GameButtons from "@/components/downloads/GameButtons";
-import LoginRedirect from "@/components/login/login-redirect";
-import ActiveEndpointSelector from "@/components/shared/ActiveEndpointSelector";
 import OnlinePlayersDisplay from "@/components/shared/OnlinePlayersDisplay";
 import VersionInfoCard from "@/components/shared/AutoUpdater";
+import ActionButtons from "@/components/downloads/ActionButtons";
 // import { Progress } from "@/components/ui/progress";
 // import Image from "next/image";
 // import { useRouter } from "next/router";
@@ -22,10 +20,11 @@ export default function Home() {
       {/* <LoginRedirect></LoginRedirect> */}
       <div className="flex flex-col gap-6 items-center">
         <OnlinePlayersDisplay></OnlinePlayersDisplay>
-        <GameButtons></GameButtons>
-        <VersionInfoCard></VersionInfoCard>
+        <ActionButtons></ActionButtons>
+        {/* <GameButtons></GameButtons> */}
+        {/* <VersionInfoCard></VersionInfoCard> */}
       </div>
-      <ActiveEndpointSelector></ActiveEndpointSelector>
+      {/* <ActiveEndpointSelector></ActiveEndpointSelector> */}
       {/* <Download></Download>
         <LaunchGame></LaunchGame> */}
     </main>

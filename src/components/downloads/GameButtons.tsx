@@ -1,9 +1,7 @@
 'use client'
 import React, { useEffect, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { RootState } from '@/store/configureStore'
 import DownloadButton from './DownloadButton'
-import { changeDownloadStatus, setIgnoredPaths, setVersions } from '@/store/slice/downloadSlice'
 import UpdateButton from './UpdateButton'
 import { resetMods, setModsData } from '@/store/slice/modsSlice'
 import LaunchButton from './LaunchButton'
@@ -206,12 +204,12 @@ const GameButtons = () => {
 
     return (
         <div className="flex flex-col gap-2">
-            {status === 'needFisrtInstall' && <DownloadButton />}
+            {/* {status === 'needFisrtInstall' && <DownloadButton />}
             {needsUpdate ? (
                 <UpdateButton />
             ) : (
                 status === 'downloaded' && <LaunchButton />
-            )}
+            )} */}
         </div>
     )
 }

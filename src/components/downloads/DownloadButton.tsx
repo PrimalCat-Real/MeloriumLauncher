@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { invoke } from "@tauri-apps/api/core";
 // Импорт функции удаления из плагина FS Tauri v2
-import { remove, exists } from "@tauri-apps/plugin-fs"; 
+import { remove, exists } from "@tauri-apps/plugin-fs";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/configureStore";
 import { setGameDir, changeDownloadStatus } from "@/store/slice/downloadSlice";
@@ -37,35 +37,35 @@ const DownloadButton: React.FC = () => {
   const [taskId, setTaskId] = useState<string>("");
   const { state, ui } = useTaskProgress(taskId);
 
-  const [verifying, setVerifying] = useState(false); 
+  const [verifying, setVerifying] = useState(false);
   const { scanDirectory } = useLocalFileHashes();
   const { fetchManifest } = useManifest();
   const { compareFiles, syncFiles } = useFileSync();
 
   const handleOpenDialog = useCallback(() => setDialogOpen(true), []);
-  
+
   const handlePickPath = useCallback(async () => {
     const selected = await openDialog({ directory: true, multiple: false, title: "Выберите папку для установки игры" });
     if (selected && typeof selected === "string") {
       try {
         const appPath = await resourceDir();
-        
+
         if (normalizePath(selected) === normalizePath(appPath)) {
-            toast.error("Недопустимая папка", { 
-                description: "Нельзя установить игру в папку с лаунчером. Пожалуйста, создайте или выберите отдельную папку." 
-            });
-            return;
+          toast.error("Недопустимая папка", {
+            description: "Нельзя установить игру в папку с лаунчером. Пожалуйста, создайте или выберите отдельную папку."
+          });
+          return;
         }
       } catch (e) {
         console.warn("[DownloadButton] Could not verify resource dir:", e);
       }
       let pathToUse = selected;
       const isEmpty = await invoke<boolean>("is_dir_empty", { path: selected }).catch(() => false);
-      
+
       if (!isEmpty) {
         pathToUse = selected.endsWith("melorium") ? selected : `${selected}/melorium`;
         const meloriumExists = await invoke<boolean>("is_dir_empty", { path: pathToUse }).catch(() => null);
-        
+
         if (meloriumExists === false) {
           toast.error("Ошибка", { description: "Папка melorium внутри выбранной директории уже существует и не пуста." });
           return;
@@ -98,40 +98,40 @@ const DownloadButton: React.FC = () => {
         removeZip: true,
         taskId: id,
       });
-       if (activeEndPoint) { // Если есть сеть/эндпоинт
-          setVerifying(true); // Меняем UI на "Проверка..."
-          console.log("[Download] Starting integrity check...");
+      if (activeEndPoint) { // Если есть сеть/эндпоинт
+        setVerifying(true); // Меняем UI на "Проверка..."
+        console.log("[Download] Starting integrity check...");
 
-          try {
-              // Считаем хеши того, что распаковали
-              const localHashes = await scanDirectory(gameDir);
-              // Берем эталон с сервера
-              const serverManifest = await fetchManifest(activeEndPoint, authToken);
-              
-              // Сравниваем
-              const syncResult = compareFiles(
-                  localHashes, 
-                  serverManifest, 
-                  Array.isArray(ignoredPaths) ? ignoredPaths : []
-              );
+        try {
+          // Считаем хеши того, что распаковали
+          const localHashes = await scanDirectory(gameDir);
+          // Берем эталон с сервера
+          const serverManifest = await fetchManifest(activeEndPoint, authToken);
 
-              // Если что-то не так (битые файлы или unzip пропустил что-то)
-              const brokenCount = syncResult.toDownload.length + syncResult.toUpdate.length;
-              
-              if (brokenCount > 0) {
-                  console.warn(`[Download] Found ${brokenCount} broken files. Auto-fixing...`);
-                  toast.info(`Найдено ${brokenCount} поврежденных файлов.`);
-                  
-                  // Запускаем syncFiles (он сам скачает нужное)
-                  await syncFiles(syncResult, activeEndPoint, gameDir, authToken);
-                  toast.success("Файлы восстановлены");
-              } else {
-                  console.log("[Download] Integrity check passed.");
-              }
-          } catch (verifyError) {
-              console.warn("Verification skipped due to error:", verifyError);
-              // Не фейлим установку, если сервер недоступен, т.к. файлы уже распакованы
+          // Сравниваем
+          const syncResult = compareFiles(
+            localHashes,
+            serverManifest,
+            Array.isArray(ignoredPaths) ? ignoredPaths : []
+          );
+
+          // Если что-то не так (битые файлы или unzip пропустил что-то)
+          const brokenCount = syncResult.toDownload.length + syncResult.toUpdate.length;
+
+          if (brokenCount > 0) {
+            console.warn(`[Download] Found ${brokenCount} broken files. Auto-fixing...`);
+            toast.info(`Найдено ${brokenCount} поврежденных файлов.`);
+
+            // Запускаем syncFiles (он сам скачает нужное)
+            await syncFiles(syncResult, activeEndPoint, gameDir, authToken);
+            toast.success("Файлы восстановлены");
+          } else {
+            console.log("[Download] Integrity check passed.");
           }
+        } catch (verifyError) {
+          console.warn("Verification skipped due to error:", verifyError);
+          // Не фейлим установку, если сервер недоступен, т.к. файлы уже распакованы
+        }
       }
       dispatch(changeDownloadStatus("downloaded"));
       setDialogOpen(false);
@@ -142,8 +142,8 @@ const DownloadButton: React.FC = () => {
       try {
         const fileExists = await exists(zipPath);
         if (fileExists) {
-           await remove(zipPath);
-           console.log("Битый архив успешно удален:", zipPath);
+          await remove(zipPath);
+          console.log("Битый архив успешно удален:", zipPath);
         }
       } catch (cleanupError) {
         console.warn("Не удалось удалить файл через FS плагин:", cleanupError);
@@ -151,7 +151,7 @@ const DownloadButton: React.FC = () => {
 
       setStarted(false);
       setVerifying(false);
-      setStarted(false); 
+      setStarted(false);
 
     }
   }, [dispatch, gameDir, activeEndPoint, authToken, ignoredPaths]);
@@ -197,7 +197,7 @@ const DownloadButton: React.FC = () => {
         speed={ui.speed}
         eta={ui.eta}
         canClose={canClose}
-        hideTransferStats={verifying} 
+        hideTransferStats={verifying}
         onClose={() => handleDialogOpenChange(false)}
       />
     );
@@ -211,18 +211,18 @@ const DownloadButton: React.FC = () => {
       </Button>
 
       <Dialog open={dialogOpen} onOpenChange={handleDialogOpenChange}>
-        <DialogContent  className="sm:max-w-[450px] rounded-2xl" showCloseButton={!isLocked} 
-            onEscapeKeyDown={(e) => {
-                    if (isLocked) e.preventDefault();
-                }}
-            onInteractOutside={(e) => {
-                    if (isLocked) e.preventDefault();
-                }}
-            >
+        <DialogContent className="sm:max-w-[450px] rounded-2xl" showCloseButton={!isLocked}
+          onEscapeKeyDown={(e) => {
+            if (isLocked) e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            if (isLocked) e.preventDefault();
+          }}
+        >
           {/* Фикс ошибки из консоли (Warning: Missing Description/Title) */}
           <VisuallyHidden>
-             <DialogTitle>Меню установки</DialogTitle>
-             <DialogDescription>Прогресс загрузки и установки игры</DialogDescription>
+            <DialogTitle>Меню установки</DialogTitle>
+            <DialogDescription>Прогресс загрузки и установки игры</DialogDescription>
           </VisuallyHidden>
 
           <Suspense
