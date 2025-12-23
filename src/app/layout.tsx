@@ -9,6 +9,7 @@ import Header from "@/components/header/Header";
 import QueryProvider from "@/components/provider/query-provider";
 import Footer from "@/components/header/Footer";
 import AuthGuardProvider from "@/components/provider/AuthGuardProvider";
+import GameConfigProvider from "@/components/provider/GameConfigProvider";
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -35,10 +36,12 @@ export default function RootLayout({
       >
         <QueryProvider>
           <AuthGuardProvider>
-            <Header></Header>
-            <Image className="fixed top-0 left-0 w-full h-full" src={bg} alt="bg" width={988} height={629} />
-            {children}
-            <Footer></Footer>
+            <GameConfigProvider>
+              <Header></Header>
+              <Image className="fixed top-0 left-0 w-full h-full" src={bg} alt="bg" width={988} height={629} />
+              {children}
+              <Footer></Footer>
+            </GameConfigProvider>
           </AuthGuardProvider>
         </QueryProvider>
         <Toaster richColors></Toaster>

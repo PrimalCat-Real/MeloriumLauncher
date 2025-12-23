@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 
 
 
-type ActionStatus = 'not-installed' | 'installing' | 'need-update' | 'updating' | 'verify'
+type ActionStatus = 'not-installed' | 'installing' | 'need-update' | 'updating' | 'verify' | 'installed'
 
 
 export interface ActionState {
@@ -16,6 +16,8 @@ export interface ActionState {
     setLocalGameVersion: (localGameVersion: string) => void,
     setServerGameVersion: (serverGameVersion: string) => void,
     setIgnoredPaths: (paths: string[]) => void
+    setActionStatus: (actioneStatus: ActionStatus) => void
+    setVersions: (local: string | null, server: string | null) => void
 }
 
 
@@ -26,6 +28,15 @@ export const useActionStore = create<ActionState>()(
         localGameVersion: null,
         serverGameVersion: null,
         ignoredPaths: [],
+        setVersions: (local, server) => set({ 
+            localGameVersion: local, 
+            serverGameVersion: server 
+        }),
+        setActionStatus(actioneStatus) {
+            set({
+                actioneStatus
+            })
+        },
         setGameDirection(gameDirection) {
             set({
                 gameDirection
