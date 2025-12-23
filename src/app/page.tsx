@@ -3,7 +3,7 @@ import Image from "next/image";
 import title from '@/assets/images/title.png'
 import OnlinePlayersDisplay from "@/components/shared/OnlinePlayersDisplay";
 import VersionInfoCard from "@/components/shared/AutoUpdater";
-import ActionButtons from "@/components/downloads/ActionButtons";
+import ActionButtons from "@/components/buttons/ActionButtons";
 // import { Progress } from "@/components/ui/progress";
 // import Image from "next/image";
 // import { useRouter } from "next/router";

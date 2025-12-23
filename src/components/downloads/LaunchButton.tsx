@@ -38,7 +38,7 @@ const LaunchButton = () => {
 
     const { scanDirectory, isScanning } = useLocalFileHashes()
     const { fetchManifest } = useManifest()
-    const { compareFiles, syncFiles, isSyncing, progress } = useFileSync()
+    const { compareFiles, syncFiles, isSyncingFiles, syncProgress } = useFileSync()
 
     const userUuid = useMemo(() => crypto.randomUUID(), [])
 
@@ -61,6 +61,13 @@ const LaunchButton = () => {
     }, [])
 
     const handleLaunch = useCallback(async () => {
+        console.log("launch started", {
+            activeEndPoint,
+            gameDirection,
+            authToken: !!authToken,
+            localGameVersion,
+            serverGameVersion
+        });
         if (!activeEndPoint) {
             LOGGER.error("Endpoint configuration error")
             return
@@ -94,20 +101,20 @@ const LaunchButton = () => {
 
             setLaunchStatus({ status: 'launching' })
 
-            if (userLogin && authToken) {
-                executeAsyncTask((async () => {
-                    const publicIpAddress = await getPublicIp()
-                    await whitelistIp(activeEndPoint, {
-                        login: userLogin,
-                        accessToken: authToken,
-                        address: publicIpAddress
-                    })
-                })())
-            }
+            // if (userLogin && authToken) {
+            //     executeAsyncTask((async () => {
+            //         const publicIpAddress = await getPublicIp()
+            //         await whitelistIp(activeEndPoint, {
+            //             login: userLogin,
+            //             accessToken: authToken,
+            //             address: publicIpAddress
+            //         })
+            //     })())
+            // }
 
             setActionStatus("idll")
 
-            await useMinecraftLaunch(gameParams)
+            // await useMinecraftLaunch(gameParams)
 
         } catch (error) {
             LOGGER.error('[Launch] Error:', error)
@@ -121,7 +128,7 @@ const LaunchButton = () => {
         userLogin, userPassword,
     ])
 
-    const isButtonDisabled = launchStatus.status !== 'idle' || isScanning || isSyncing
+    const isButtonDisabled = launchStatus.status !== 'idle' || isScanning || isSyncingFiles
 
     const buttonContent = useMemo(() => {
         switch (launchStatus.status) {
@@ -129,33 +136,33 @@ const LaunchButton = () => {
                 return (
                     <>
                         <LoaderCircle className="h-4 w-4 animate-spin" />
-                        <span>Launching</span>
+                        <span>Запуск</span>
                     </>
                 )
             case 'syncing':
                 return (
                     <>
                         <LoaderCircle className="h-4 w-4 animate-spin" />
-                        <span className="text-sm">{progress.percent}%</span>
+                        <span className="text-sm">{syncProgress.percent}%</span>
                     </>
                 )
             case 'verify':
                 return (
                     <>
                         <LoaderCircle className="h-4 w-4 animate-spin" />
-                        <span>Verifying</span>
+                        <span>Проверка</span>
                     </>
                 )
             default:
-                return <span>Play</span>
+                return <span>Играть</span>
         }
-    }, [launchStatus.status, progress.percent])
+    }, [launchStatus.status, syncProgress.percent])
 
     return (
         <Button
             disabled={isButtonDisabled}
             onClick={handleLaunch}
-            className="w-full font-bold text-lg h-12"
+            className="w-48"
         >
             {buttonContent}
         </Button>

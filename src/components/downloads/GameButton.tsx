@@ -1,7 +1,7 @@
 'use client'
 import React, { useEffect, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import DownloadButton from './DownloadButton'
+import DownloadButton from './DownloadButtonOld'
 import UpdateButton from './UpdateButton'
 import { resetMods, setModsData } from '@/store/slice/modsSlice'
 import LaunchButton from './LaunchButtonOld'
