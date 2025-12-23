@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 
 
 
-type ActionStatus = 'not-installed' | 'installing' | 'need-update' | 'updating' | 'verify' | 'installed'
+type ActionStatus = 'not-installed' | 'installing' | 'need-update' | 'updating' | 'verify' | 'installed' | 'idll'
 
 
 export interface ActionState {

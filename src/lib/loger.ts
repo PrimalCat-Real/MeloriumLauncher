@@ -1,13 +1,14 @@
 import { toast } from "sonner"
-import { success } from "zod";
+import * as Sentry from "@sentry/browser"
 
 type LoggerFunc = (message: string, details?: unknown) => void;
 
 export const LOGGER = {
-     error: ((message, error) => {
+    error: ((message, error) => {
         const errorMsg = error instanceof Error ? error.message : String(error);
         toast.error(message, { description: errorMsg });
         console.error(message, errorMsg);
+        Sentry.captureException(error);
     }) as LoggerFunc,
     log: ((message, details) => {
         const detailsMsg = String(details)
